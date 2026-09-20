@@ -1,0 +1,19 @@
+# Lightweight dependencies for tests, linting, and CI.
+#
+# The full runtime stack (requirements.txt) pulls in opencv, mediapipe,
+# torch and friends — several GB. The web layer deliberately lazy-loads
+# those modules (see app/core/session_manager.py, app/api/routes_users.py,
+# app/hardware/arduino_controller.py), so the FastAPI app and the test
+# suite run on just these packages. Real camera / ML / hardware behavior
+# still needs the full install and physical hardware.
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+websockets>=12.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+sqlalchemy>=2.0.0
+
+# Test + lint tooling
+pytest>=8.0.0
+httpx>=0.27.0
+ruff>=0.5.0

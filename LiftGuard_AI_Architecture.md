@@ -133,6 +133,10 @@ Nothing in this table changes internal logic — it's purely "which folder + whi
 
 ---
 
-## Next step
+## Status
 
-Once you're happy with this shape, next stage is the FastAPI skeleton: `core/session_manager.py` wrapping `LiftGuardAI`, plus `ws_live.py` streaming its first live frame end-to-end — that's the piece everything else depends on.
+The FastAPI backend (`core/session_manager.py` wrapping `LiftGuardAI`, `ws_live.py`
+streaming frames) and the full Next.js frontend are implemented and pass CI
+(type-check, production build, unit tests, lint). Next stage is on-hardware
+validation: real webcam run, Arduino/ESP32 laser connect + calibration, then
+publishing measured FPS/latency/accuracy numbers.

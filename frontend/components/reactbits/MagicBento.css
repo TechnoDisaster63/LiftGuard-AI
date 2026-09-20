@@ -1,0 +1,214 @@
+:root {
+  --purple-primary: rgba(124, 92, 255, 1);
+  --purple-glow: rgba(124, 92, 255, 0.22);
+  --purple-border: rgba(124, 92, 255, 0.8);
+  --border-color: rgba(237, 239, 243, 0.09);
+  --background-dark: #10131a;
+  color-scheme: dark;
+}
+
+.card-grid {
+  display: grid;
+  gap: 0.6em;
+  padding: 0;
+  max-width: none;
+  font-size: clamp(1rem, 0.9rem + 0.5vw, 1.5rem);
+}
+
+/* The <Link> wrapper is invisible to layout (display:contents) so the card
+   itself is the actual grid item — but nth-child selectors below target the
+   link (which keeps its real DOM position among siblings) and reach into
+   its child for the grid-span/appearance rules. */
+.magic-bento-card__link {
+  display: contents;
+  text-decoration: none;
+  color: inherit;
+}
+
+.magic-bento-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  aspect-ratio: 4/3;
+  min-height: 170px;
+  width: 100%;
+  max-width: 100%;
+  padding: 1.15em;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--background-dark);
+  font-weight: 300;
+  overflow: hidden;
+  transition: all 0.25s ease;
+  cursor: pointer;
+
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+  --glow-radius: 200px;
+}
+
+.magic-bento-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+  border-color: rgba(237, 239, 243, 0.16);
+}
+
+.magic-bento-card__header,
+.magic-bento-card__content {
+  display: flex;
+  position: relative;
+  color: #edeff3;
+}
+
+.magic-bento-card__header {
+  gap: 0.75em;
+  justify-content: space-between;
+}
+
+.magic-bento-card__content {
+  flex-direction: column;
+}
+
+.magic-bento-card__label {
+  font-size: 11px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c5cff;
+}
+
+.magic-bento-card__title {
+  font-weight: 500;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 17px;
+  margin: 0 0 0.3em;
+}
+
+.magic-bento-card__description {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #8b93a3;
+}
+
+.magic-bento-card--text-autohide .magic-bento-card__title,
+.magic-bento-card--text-autohide .magic-bento-card__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.magic-bento-card--text-autohide .magic-bento-card__title {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.magic-bento-card--text-autohide .magic-bento-card__description {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+@media (max-width: 599px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+  .magic-bento-card {
+    width: 100%;
+    min-height: 150px;
+  }
+}
+
+@media (min-width: 600px) {
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Column-flow instead of row-flow: with 2 columns, items 1-3 fill straight
+     down the left column and items 4-6 fill straight down the right column
+     — a deliberate, balanced half-and-half split rather than the previous
+     asymmetric hero card taking up a 2x2 block. */
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-flow: column;
+    grid-template-rows: repeat(3, minmax(150px, 1fr));
+    gap: 0.75em;
+  }
+
+  .card-grid--compact {
+    grid-template-rows: repeat(2, minmax(130px, 1fr));
+  }
+}
+
+/* Compact variant — used for smaller, non-hero card sets (e.g. a 4-card
+   quick-actions grid on the Users page). Shorter cards since there's less
+   copy per card; grid-template-rows above handles the 2-row case. */
+.card-grid--compact .magic-bento-card {
+  aspect-ratio: auto;
+  min-height: 130px;
+}
+
+/* Border glow — follows the cursor via GlobalSpotlight setting --glow-* vars */
+.magic-bento-card--border-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 6px;
+  background: radial-gradient(
+    var(--glow-radius) circle at var(--glow-x) var(--glow-y),
+    rgba(124, 92, 255, calc(var(--glow-intensity) * 0.8)) 0%,
+    rgba(124, 92, 255, calc(var(--glow-intensity) * 0.4)) 30%,
+    transparent 60%
+  );
+  border-radius: inherit;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.magic-bento-card--border-glow:hover {
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 30px var(--purple-glow);
+}
+
+.particle-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.particle::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: rgba(124, 92, 255, 0.2);
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.global-spotlight {
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+  z-index: 200 !important;
+  pointer-events: none;
+}
+
+.bento-section {
+  position: relative;
+  user-select: none;
+}
