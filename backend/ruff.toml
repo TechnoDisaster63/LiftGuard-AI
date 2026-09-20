@@ -1,0 +1,6 @@
+# Error-level rules only: syntax errors (E9) and Pyflakes (F).
+# Style/import-sort rules are intentionally not enforced — the AI modules
+# were carried over from the original desktop app and are meant to stay
+# close to it.
+[lint]
+select = ["E9", "F"]

@@ -1,0 +1,16 @@
+LIFTGUARD AI - CALIBRATION RESULTS
+========================================
+ 
+BODY_POSITIONS = {
+    'HEAD': (95, 110),
+    'SPINE': (95, 126),
+    'LEFT_SHOULDER': (90, 121),
+    'RIGHT_SHOULDER': (100, 121),
+    'LEFT_HIP': (90, 126),
+    'RIGHT_HIP': (100, 126),
+    'LEFT_KNEE': (94, 141),
+    'RIGHT_KNEE': (99, 141),
+    'LEFT_ANKLE': (99, 153),
+    'RIGHT_ANKLE': (99, 153),
+    'CENTER': (99, 153),
+}

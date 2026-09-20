@@ -1,0 +1,24 @@
+# ── Original AI/CV dependencies (unchanged versions) ──────────
+# opencv-contrib-python replaces opencv-python: user_manager_lite.py uses
+# cv2.face.LBPHFaceRecognizer_create(), which only ships in the contrib build.
+opencv-contrib-python==4.8.0.74
+mediapipe==0.10.3
+numpy==1.24.3
+scikit-learn==1.3.0
+pyttsx3==2.90
+joblib==1.3.1
+scipy==1.11.1
+
+# ── Additional deps actually imported by the source but missing from the
+#    original requirements.txt (tcn_model.py/train_tcn.py, arduino_controller.py) ──
+torch>=2.0.0
+matplotlib>=3.7.0
+pyserial>=3.5
+
+# ── Web layer (new) ─────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+websockets>=12.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+sqlalchemy>=2.0.0
