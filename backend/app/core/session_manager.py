@@ -35,6 +35,19 @@ class SessionManager:
         self.cap = None
         self.active = False
         self.camera_id = 0
+        # A VideoCapture and its mutable ML pipeline cannot be advanced by
+        # two WebSocket loops at once. Only one live stream may drive a
+        # session; extra dashboards receive a clear close code instead of
+        # racing camera reads and model state.
+        import threading
+        self._stream_lock = threading.Lock()
+
+    def acquire_stream(self) -> bool:
+        return self._stream_lock.acquire(blocking=False)
+
+    def release_stream(self) -> None:
+        if self._stream_lock.locked():
+            self._stream_lock.release()
 
     # ── Lifecycle ────────────────────────────────────────────
     def start(self, camera_id: int = 0):

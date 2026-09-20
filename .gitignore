@@ -26,3 +26,7 @@ backend/models/
 .DS_Store
 Thumbs.db
 tsconfig.tsbuildinfo
+
+# Atomic/recovery files written by local settings persistence
+backend/data/*.tmp
+backend/data/*.corrupt

@@ -2,6 +2,15 @@
 // Types mirror backend/app/schemas/*.py exactly.
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const API_KEY = process.env.NEXT_PUBLIC_LIFTGUARD_API_KEY ?? "";
+
+function authHeaders(): HeadersInit {
+  return API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {};
+}
+
+function jsonHeaders(): HeadersInit {
+  return { "Content-Type": "application/json", ...authHeaders() };
+}
 
 export interface SessionStartRequest {
   camera_id?: number;
@@ -77,7 +86,7 @@ export interface UserRegisterResponse {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     ...options,
   });
   if (!res.ok) {
@@ -118,7 +127,7 @@ export const api = {
     register: async (displayName: string, images: string[]): Promise<UserRegisterResponse> => {
       const res = await fetch(`${API_BASE}/api/users/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders(),
         body: JSON.stringify({ display_name: displayName, images }),
       });
       const body = await res.json().catch(() => ({}));
@@ -139,7 +148,7 @@ export const api = {
     ): Promise<{ connected: boolean; port: string | null; transport: string; message: string }> => {
       const res = await fetch(`${API_BASE}/api/hardware/${sessionId}/connect`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders(),
         body: JSON.stringify({ transport, host: opts?.host, port: opts?.port }),
       });
       const body = await res.json().catch(() => ({}));
@@ -176,4 +185,4 @@ export const api = {
   },
 };
 
-export { API_BASE };
+export { API_BASE, API_KEY };

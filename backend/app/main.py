@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,12 +8,13 @@ from .core.security import require_api_key
 from .db.database import init_db
 from .api import routes_sessions, routes_users, routes_hardware, routes_analytics, routes_settings, ws_live
 
-app = FastAPI(title=settings.APP_NAME)
-
-
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     init_db()
+    yield
+
+
+app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -33,6 +33,10 @@ async def ws_live(websocket: WebSocket, session_id: str):
         await websocket.close(code=4404, reason="Session not found")
         return
 
+    if not manager.acquire_stream():
+        await websocket.close(code=4429, reason="Session already has a live viewer")
+        return
+
     frame_interval = 1.0 / max(settings.WS_TARGET_FPS, 1)
 
     async def receive_controls():
@@ -84,3 +88,4 @@ async def ws_live(websocket: WebSocket, session_id: str):
         pass
     finally:
         control_task.cancel()
+        manager.release_stream()
