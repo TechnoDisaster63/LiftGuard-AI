@@ -288,7 +288,7 @@ const ParticleCard = ({
 };
 
 interface GlobalSpotlightProps {
-  gridRef: React.RefObject<HTMLDivElement>;
+  gridRef: React.RefObject<HTMLDivElement | null>;
   disableAnimations?: boolean;
   enabled?: boolean;
   spotlightRadius?: number;

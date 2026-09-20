@@ -1,17 +1,6 @@
-"""
-Editable session defaults — the settings a person can actually change from
-the dashboard (camera id, voice, Arduino, model complexity, TCN on/off).
-
-Distinct from core/config.py's Settings, which is process-level
-infrastructure config (CORS origins, DB path, WS frame rate) meant to be set
-once via environment variables at deploy time, not toggled from a UI.
-
-Persisted to a small JSON file rather than a DB table — this is a single
-settings object, not a collection that needs querying/joining, so a table
-would be overkill. Loaded once at startup with env-var fallback for the
-very first run, then the file (once it exists) is the source of truth.
-"""
+"""Thread-safe, crash-tolerant persistence for editable session defaults."""
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -29,23 +18,44 @@ _FIELDS = (
 )
 
 
+def _environment_defaults() -> dict:
+    return {
+        "camera_id": env_settings.DEFAULT_CAMERA_ID,
+        "voice_enabled": env_settings.VOICE_ENABLED,
+        "arduino_enabled": env_settings.ARDUINO_ENABLED,
+        "model_complexity": env_settings.MODEL_COMPLEXITY,
+        "process_every_n": env_settings.PROCESS_EVERY_N,
+        "use_temporal": env_settings.USE_TEMPORAL,
+    }
+
+
 class SessionDefaultsStore:
     def __init__(self, path: Path):
         self._path = path
         self._lock = threading.Lock()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        if self._path.exists():
-            self._data = json.loads(self._path.read_text())
-        else:
-            self._data = {
-                "camera_id": env_settings.DEFAULT_CAMERA_ID,
-                "voice_enabled": env_settings.VOICE_ENABLED,
-                "arduino_enabled": env_settings.ARDUINO_ENABLED,
-                "model_complexity": env_settings.MODEL_COMPLEXITY,
-                "process_every_n": env_settings.PROCESS_EVERY_N,
-                "use_temporal": env_settings.USE_TEMPORAL,
-            }
+        self._data = self._load()
+        if not self._path.exists():
             self._save()
+
+    def _load(self) -> dict:
+        defaults = _environment_defaults()
+        if not self._path.exists():
+            return defaults
+        try:
+            stored = json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            # A partial/corrupt settings file must not prevent the API from
+            # starting. Preserve it for diagnosis and recover safe defaults.
+            corrupt_path = self._path.with_suffix(self._path.suffix + ".corrupt")
+            try:
+                os.replace(self._path, corrupt_path)
+            except OSError:
+                pass
+            return defaults
+        if not isinstance(stored, dict):
+            return defaults
+        return {**defaults, **{key: stored[key] for key in _FIELDS if key in stored}}
 
     def get(self) -> dict:
         with self._lock:
@@ -59,8 +69,10 @@ class SessionDefaultsStore:
             self._save()
             return dict(self._data)
 
-    def _save(self):
-        self._path.write_text(json.dumps(self._data, indent=2))
+    def _save(self) -> None:
+        temporary = self._path.with_suffix(self._path.suffix + ".tmp")
+        temporary.write_text(json.dumps(self._data, indent=2), encoding="utf-8")
+        os.replace(temporary, self._path)
 
 
 session_defaults = SessionDefaultsStore(_DEFAULTS_PATH)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_BASE } from "./api";
+import { API_BASE, API_KEY } from "./api";
 
 export interface UserTelemetry {
   display_name: string | null;
@@ -81,7 +81,9 @@ export function useLiveSession(sessionId: string | null) {
     if (!sessionId) return;
 
     const wsBase = API_BASE.replace(/^http/, "ws");
-    const ws = new WebSocket(`${wsBase}/ws/live/${sessionId}`);
+    const url = new URL(`${wsBase}/ws/live/${sessionId}`);
+    if (API_KEY) url.searchParams.set("token", API_KEY);
+    const ws = new WebSocket(url);
     wsRef.current = ws;
     setState("connecting");
 
