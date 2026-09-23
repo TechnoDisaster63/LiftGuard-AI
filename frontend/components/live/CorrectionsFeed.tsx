@@ -16,13 +16,35 @@ const PRIORITY_COLOR: Record<number, string> = {
   3: "text-brand border-brand/30 bg-brand/5",
 };
 
-export function CorrectionsFeed({ corrections }: { corrections: Correction[] }) {
-  if (!corrections?.length) {
+const FLAG_TEXT: Record<string, string> = {
+  LIMITED_DEPTH: "Last rep: limited depth",
+  EXCESSIVE_TRUNK_LEAN: "Last rep: trunk lean",
+  LOW_RANGE_OF_MOTION: "Last rep: low range of motion",
+};
+
+// Live cues and the last counted rep's form-risk flags are shown together so
+// the panel never says "no corrections" while the rep card shows a flag.
+export function CorrectionsFeed({
+  corrections,
+  repFlags = [],
+}: {
+  corrections: Correction[];
+  repFlags?: string[];
+}) {
+  const flagItems: Correction[] = (repFlags ?? []).map((flag) => ({
+    id: `rep_${flag}`,
+    priority: 2,
+    command: FLAG_TEXT[flag] ?? flag,
+    display: FLAG_TEXT[flag] ?? flag,
+    body_part: "FORM-RISK FLAG",
+  }));
+  corrections = [...(corrections ?? []), ...flagItems];
+  if (!corrections.length) {
     return (
       <Card className="p-4">
         <CardEyebrow className="mb-2">Form Corrections</CardEyebrow>
-        <p className="text-sm text-risk-low flex items-center gap-1.5">
-          <CheckCircle2 size={14} /> Good form — no corrections needed
+        <p className="text-sm text-ink-muted flex items-center gap-1.5">
+          <CheckCircle2 size={14} /> No live cues right now
         </p>
       </Card>
     );
