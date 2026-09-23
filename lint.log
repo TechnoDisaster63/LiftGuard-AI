@@ -1,0 +1,4 @@
+
+> liftguard-ai-dashboard@0.1.0 lint
+> tsc --noEmit
+

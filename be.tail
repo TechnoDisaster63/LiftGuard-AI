@@ -1,0 +1,60 @@
+🏋️ Exercise Tracker initialized
+   ✅ Exercise Tracker
+🎲 Uncertainty Manager initialized
+   ✅ Uncertainty Manager
+   ℹ️  No face data in DB yet
+   📁 DB: liftguard_users.db (0 users)
+   ✅ User Manager
+   ✅ Form Corrector
+
+🔌 Arduino disabled/unavailable
+Downloading model to /tmp/lgvenv/lib/python3.11/site-packages/mediapipe/modules/pose_landmark/pose_landmark_heavy.tflite
+
+📷 MediaPipe (complexity=2)
+
+============================================================
+✅ LIFTGUARD AI V2 READY
+============================================================
+
+  👤 Guest (no enrolled users or face ID unavailable)
+INFO:     127.0.0.1:51426 - "POST /api/sessions/start HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51438 - "WebSocket /ws/live/c9e8ca71-df25-4705-9b85-a99e68062223" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:32932 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46690 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40164 - "OPTIONS /api/sessions/c9e8ca71-df25-4705-9b85-a99e68062223/stop HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "POST /api/sessions/c9e8ca71-df25-4705-9b85-a99e68062223/stop HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "OPTIONS /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40164 - "OPTIONS /api/sessions/history?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "OPTIONS /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40180 - "OPTIONS /api/sessions/history?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/sessions/history?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "GET /api/sessions/history?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40190 - "GET /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "GET /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40190 - "GET /api/sessions/history?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40190 - "GET /api/sessions/history?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "OPTIONS /api/sessions/history/431bc3e7-d87a-4d49-b1f5-326fc04e2c76 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40190 - "GET /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/sessions/history/431bc3e7-d87a-4d49-b1f5-326fc04e2c76 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40190 - "GET /api/sessions/history/431bc3e7-d87a-4d49-b1f5-326fc04e2c76 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40190 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40164 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40180 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40172 - "GET /api/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34810 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40190 - "GET /api/sessions/history?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40164 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40180 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34810 - "GET /api/sessions/history?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34810 - "GET /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/sessions/history/c9e8ca71-df25-4705-9b85-a99e68062223 HTTP/1.1" 200 OK

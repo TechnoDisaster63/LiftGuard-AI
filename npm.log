@@ -1,0 +1,48 @@
+npm warn deprecated @tsparticles/react@3.0.0: Please update to version 4.1.1
+npm warn deprecated @tsparticles/plugin-easing-quad@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/updater-size@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/updater-opacity@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/plugin-hsl-color@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/updater-color@3.9.1: this package was deprecated in tsparticles v4, replaced by @tsparticles/updater-paint
+npm warn deprecated @tsparticles/plugin-rgb-color@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-pause@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/move-parallax@3.9.1: this package was deprecated in tsparticles v4, replaced by @tsparticles/interaction-external-parallax
+npm warn deprecated @tsparticles/shape-square@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/shape-line@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-particles-attract@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/updater-stroke-color@3.9.1: this package was deprecated in tsparticles v4, replaced by @tsparticles/updater-paint
+npm warn deprecated @tsparticles/shape-star@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/shape-circle@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/shape-emoji@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/basic@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-particles-collisions@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/move-base@3.9.1: this package was deprecated in tsparticles v4, replaced by @tsparticles/plugin-move
+npm warn deprecated @tsparticles/slim@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-push@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-remove@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/shape-polygon@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-slow@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/updater-out-modes@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/updater-rotate@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-bounce@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-attract@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-grab@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-connect@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/updater-life@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-repulse@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-external-bubble@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/interaction-particles-links@3.9.1: Please update to version 4.1.1
+npm warn deprecated @tsparticles/shape-image@3.9.1: Please update to version 4.1.1
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+npm warn deprecated @tsparticles/engine@3.9.1: Please update to version 4.1.1
+
+added 189 packages in 16s
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   @tsparticles/engine@3.9.1 (install: node ./scripts/install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm notice
+npm notice New major version of npm available! 11.19.0 -> 12.1.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0
+npm notice To update run: npm install -g npm@12.1.0
+npm notice

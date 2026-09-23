@@ -1,0 +1,66 @@
++ cd /tmp/wt-design
++ git log --oneline -1
+0cd4bf9 UI: Users, Register and Hardware in the 3-metre system; register counts frames honestly (server keeps the ones with a face)
++ cd frontend
++ npm ci --no-audit --no-fund
++ echo NPM=0
+NPM=0
++ npx tsc --noEmit
++ echo TSC=0
+TSC=0
++ npm run lint
++ echo LINT=0
+LINT=0
++ cd ../backend
++ pip install -q torch --index-url https://download.pytorch.org/whl/cpu
++ pip install -q -r requirements.txt playwright
++ echo PIP=1
+PIP=1
++ python -m playwright install --with-deps chromium
++ echo PW=1
+PW=1
++ curl -sL -o /tmp/squat.webm https://upload.wikimedia.org/wikipedia/commons/5/5c/Squat_-_exercise_demonstration_video.webm
++ ls -la /tmp/squat.webm
+-rw-r--rw- 1 codespace codespace 564942 Sep 23 10:29 /tmp/squat.webm
++ git show origin/feat/streamlit-dashboard:demo/live_from_file.py
++ pkill -f live_from_file
++ pkill -f 'next dev'
++ cd ../frontend
++ nohup setsid sh -c 'yes "Demo Athlete" | python /tmp/live_from_file.py /tmp/squat.webm --port 8000'
++ sleep 30
++ nohup setsid npx next dev -p 3000
++ curl -s localhost:8000/api/health
++ echo
+
++ curl -s -o /dev/null -w 'next %{http_code}\n' localhost:3000/
+next 307
++ python /tmp/lg_click.py
+Traceback (most recent call last):
+  File "/tmp/lg_click.py", line 2, in <module>
+    from playwright.sync_api import sync_playwright
+ModuleNotFoundError: No module named 'playwright'
++ echo CLICK=1
+CLICK=1
++ tail -40 /tmp/lglog/be.log
++ tail -40 /tmp/lglog/next.log
++ rm -rf /tmp/logrepo
++ mkdir /tmp/logrepo
++ cp /tmp/lglog/be.log /tmp/lglog/lint.log /tmp/lglog/next.log /tmp/lglog/npm.log /tmp/lglog/pip.log /tmp/lglog/pw.log /tmp/lglog/run.log /tmp/lglog/tsc.log /tmp/lglog/be.tail /tmp/lglog/next.tail /tmp/logrepo/
++ cp -r /tmp/wt-design/docs/screenshots/three-metre /tmp/logrepo/shots
+cp: cannot stat '/tmp/wt-design/docs/screenshots/three-metre': No such file or directory
++ cd /tmp/logrepo
++ git init -q
++ git add -A
++ git -c user.email=bot@x -c user.name=lg commit -qm log
+++ git -C /tmp/wt-design remote get-url origin
++ git push -f https://github.com/TechnoDisaster63/LiftGuard-AI HEAD:refs/heads/tmp/clickthrough-log
+remote: 
+remote: Create a pull request for 'tmp/clickthrough-log' on GitHub by visiting:        
+remote:      https://github.com/TechnoDisaster63/LiftGuard-AI/pull/new/tmp/clickthrough-log        
+remote: 
+To https://github.com/TechnoDisaster63/LiftGuard-AI
+ * [new branch]      HEAD -> tmp/clickthrough-log
++ echo PUSHLOG=0
+PUSHLOG=0
++ echo ALLDONE
+ALLDONE

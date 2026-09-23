@@ -1,0 +1,115 @@
++ python3 --version
+Python 3.14.2
++ pip install -q uv
++ V=/tmp/lgvenv
++ uv venv -p 3.11 /tmp/lgvenv
+Downloading cpython-3.11.16-linux-x86_64-gnu (download) (29.4MiB)
+ Downloaded cpython-3.11.16-linux-x86_64-gnu (download)
+Using CPython 3.11.16
+Creating virtual environment at: lgvenv
+Activate with: source lgvenv/bin/activate
++ . /tmp/lgvenv/bin/activate
+++ '[' -z '' ']'
+++ '[' -n x ']'
+++ SCRIPT_PATH=/tmp/lgvenv/bin/activate
+++ '[' /tmp/lgvenv/bin/activate = ./lg_run2.sh ']'
+++ deactivate nondestructive
+++ unset -f pydoc
+++ '[' -z '' ']'
+++ '[' -z '' ']'
+++ hash -r
+++ '[' -z '' ']'
+++ unset VIRTUAL_ENV
+++ unset VIRTUAL_ENV_PROMPT
+++ '[' '!' nondestructive = nondestructive ']'
+++ VIRTUAL_ENV=/tmp/lgvenv
+++ '[' linux-gnu = cygwin ']'
+++ '[' linux-gnu = msys ']'
+++ export VIRTUAL_ENV
+++ '[' -z '' ']'
+++ unset SCRIPT_PATH
+++ _OLD_VIRTUAL_PATH=/vscode/bin/linux-x64/7debcd0e2acdea1c52de81bf9ee1620444407dda/bin/remote-cli:/home/codespace/.local/bin:/usr/local/rubies/current/bin:/home/codespace/.dotnet:/home/codespace/nvm/current/bin:/home/codespace/.php/current/bin:/home/codespace/.python/current/bin:/home/codespace/java/current/bin:/home/codespace/.ruby/current/bin:/home/codespace/.local/bin:/usr/local/python/current/bin:/usr/local/py-utils/bin:/usr/local/jupyter:/usr/local/oryx:/usr/local/go/bin:/go/bin:/usr/local/sdkman/bin:/usr/local/sdkman/candidates/java/current/bin:/usr/local/sdkman/candidates/gradle/current/bin:/usr/local/sdkman/candidates/maven/current/bin:/usr/local/sdkman/candidates/ant/current/bin:/usr/local/share/rbenv/shims:/usr/local/share/rbenv/bin:/usr/local/rubies/current/bin:/usr/local/php/current/bin:/opt/conda/bin:/usr/local/share/nvm/versions/node/v24.21.0/bin:/usr/local/hugo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/share/dotnet:/home/codespace/.dotnet/tools
+++ PATH=/tmp/lgvenv/bin:/vscode/bin/linux-x64/7debcd0e2acdea1c52de81bf9ee1620444407dda/bin/remote-cli:/home/codespace/.local/bin:/usr/local/rubies/current/bin:/home/codespace/.dotnet:/home/codespace/nvm/current/bin:/home/codespace/.php/current/bin:/home/codespace/.python/current/bin:/home/codespace/java/current/bin:/home/codespace/.ruby/current/bin:/home/codespace/.local/bin:/usr/local/python/current/bin:/usr/local/py-utils/bin:/usr/local/jupyter:/usr/local/oryx:/usr/local/go/bin:/go/bin:/usr/local/sdkman/bin:/usr/local/sdkman/candidates/java/current/bin:/usr/local/sdkman/candidates/gradle/current/bin:/usr/local/sdkman/candidates/maven/current/bin:/usr/local/sdkman/candidates/ant/current/bin:/usr/local/share/rbenv/shims:/usr/local/share/rbenv/bin:/usr/local/rubies/current/bin:/usr/local/php/current/bin:/opt/conda/bin:/usr/local/share/nvm/versions/node/v24.21.0/bin:/usr/local/hugo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/share/dotnet:/home/codespace/.dotnet/tools
+++ export PATH
+++ '[' x '!=' x ']'
++++ basename /tmp/lgvenv
+++ VIRTUAL_ENV_PROMPT=lgvenv
+++ export VIRTUAL_ENV_PROMPT
+++ '[' -z '' ']'
+++ '[' -z '' ']'
+++ _OLD_VIRTUAL_PS1=
+++ PS1='(lgvenv) '
+++ export PS1
+++ alias pydoc
+++ true
+++ hash -r
++ uv pip install torch --index-url https://download.pytorch.org/whl/cpu
++ uv pip install -r /tmp/wt-design/backend/requirements.txt playwright
++ echo PIP=0
+PIP=0
++ python -m playwright install --with-deps chromium
++ echo PW=0
+PW=0
++ pkill -f live_from_file
++ cd /tmp/wt-design/backend
++ sleep 40
++ nohup setsid sh -c 'yes '\''Demo Athlete'\'' | /tmp/lgvenv/bin/python /tmp/live_from_file.py /tmp/squat.webm --port 8000'
++ curl -s localhost:8000/api/health
+{"status":"ok","app":"LiftGuard AI"}+ echo
+
++ curl -s -o /dev/null -w 'next %{http_code}\n' localhost:3000/live
+next 200
++ python /tmp/lg_click.py
+== / title='LiftGuard AI'
+  controls: ['Start session', 'Session settings']
+  - 'Start session': ok -> /live
+  - 'Session settings': ok -> /settings
+== /sessions title='LiftGuard AI'
+  controls: ['New session', 'Start the first one']
+  - 'New session': ok -> /live
+  - 'Start the first one': ok -> /reports?session=431bc3e7-d87a-4d49-b1f5-326fc04e2c76
+== /reports title='LiftGuard AI'
+  controls: ['Start one']
+  - 'Start one': ok -> /live
+== /users title='LiftGuard AI'
+  controls: ['Start face capture']
+  - 'Start face capture': ok -> /register
+== /register title='LiftGuard AI'
+  controls: ['Continue to camera Enter']
+  - 'Continue to camera Enter': disabled
+== /hardware title='LiftGuard AI'
+  controls: ['USB', 'WiFi', 'Connect over USB', 'Calibrate']
+  - 'USB': ok -> /hardware
+  - 'WiFi': ok -> /hardware
+  - 'Connect over USB': ok -> /hardware
+  [/hardware :: Connect over USB] HTTP 400 POST http://localhost:8000/api/hardware/431bc3e7-d87a-4d49-b1f5-326fc04e2c76/connect
+  [/hardware :: Connect over USB] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  - 'Calibrate': disabled
+== /settings title='LiftGuard AI'
+  controls: ['Squat', '0', '1', '2', '3', '4', 'Voice cues', 'Laser pointer', 'Lite', 'Full', 'Heavy', '1', '2', '3', '4', '5']
+  - 'Squat': ok -> /settings
+  - '0': ok -> /settings
+  - '1': ok -> /settings
+  - '2': ok -> /settings
+  - '3': ok -> /settings
+  - '4': ok -> /settings
+  - 'Voice cues': ok -> /settings
+  - 'Laser pointer': ok -> /settings
+  - 'Lite': ok -> /settings
+  - 'Full': ok -> /settings
+  - 'Heavy': ok -> /settings
+  - '1': ok -> /settings
+  - '2': ok -> /settings
+  - '3': ok -> /settings
+  - '4': ok -> /settings
+  - '5': ok -> /settings
+== /live title='LiftGuard AI'
+== live run done url=http://localhost:3000/live
+== report url=http://localhost:3000/reports?history=c9e8ca71-df25-4705-9b85-a99e68062223
++ echo CLICK=0
+CLICK=0
++ tail -60 /tmp/lglog/be.log
++ tail -60 /tmp/lglog/next.log
++ rm -rf /tmp/logrepo
++ mkdir /tmp/logrepo
++ cp /tmp/lglog/be.log /tmp/lglog/be.tail /tmp/lglog/click.log /tmp/lglog/lint.log /tmp/lglog/next.log /tmp/lglog/next.tail /tmp/lglog/npm.log /tmp/lglog/pip.log /tmp/lglog/pip2.log /tmp/lglog/pw.log /tmp/lglog/run.log /tmp/lglog/run2.log /tmp/lglog/tsc.log /tmp/logrepo/

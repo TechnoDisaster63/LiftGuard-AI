@@ -1,0 +1,46 @@
+== / title='LiftGuard AI'
+  controls: ['Start session', 'Session settings']
+  - 'Start session': ok -> /live
+  - 'Session settings': ok -> /settings
+== /sessions title='LiftGuard AI'
+  controls: ['New session', 'Start the first one']
+  - 'New session': ok -> /live
+  - 'Start the first one': ok -> /reports?session=431bc3e7-d87a-4d49-b1f5-326fc04e2c76
+== /reports title='LiftGuard AI'
+  controls: ['Start one']
+  - 'Start one': ok -> /live
+== /users title='LiftGuard AI'
+  controls: ['Start face capture']
+  - 'Start face capture': ok -> /register
+== /register title='LiftGuard AI'
+  controls: ['Continue to camera Enter']
+  - 'Continue to camera Enter': disabled
+== /hardware title='LiftGuard AI'
+  controls: ['USB', 'WiFi', 'Connect over USB', 'Calibrate']
+  - 'USB': ok -> /hardware
+  - 'WiFi': ok -> /hardware
+  - 'Connect over USB': ok -> /hardware
+  [/hardware :: Connect over USB] HTTP 400 POST http://localhost:8000/api/hardware/431bc3e7-d87a-4d49-b1f5-326fc04e2c76/connect
+  [/hardware :: Connect over USB] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  - 'Calibrate': disabled
+== /settings title='LiftGuard AI'
+  controls: ['Squat', '0', '1', '2', '3', '4', 'Voice cues', 'Laser pointer', 'Lite', 'Full', 'Heavy', '1', '2', '3', '4', '5']
+  - 'Squat': ok -> /settings
+  - '0': ok -> /settings
+  - '1': ok -> /settings
+  - '2': ok -> /settings
+  - '3': ok -> /settings
+  - '4': ok -> /settings
+  - 'Voice cues': ok -> /settings
+  - 'Laser pointer': ok -> /settings
+  - 'Lite': ok -> /settings
+  - 'Full': ok -> /settings
+  - 'Heavy': ok -> /settings
+  - '1': ok -> /settings
+  - '2': ok -> /settings
+  - '3': ok -> /settings
+  - '4': ok -> /settings
+  - '5': ok -> /settings
+== /live title='LiftGuard AI'
+== live run done url=http://localhost:3000/live
+== report url=http://localhost:3000/reports?history=c9e8ca71-df25-4705-9b85-a99e68062223

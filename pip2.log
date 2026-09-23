@@ -1,0 +1,107 @@
+Using Python 3.11.16 environment at: lgvenv
+Resolved 10 packages in 291ms
+Downloading sympy (6.0MiB)
+Downloading networkx (2.0MiB)
+Downloading setuptools (1.2MiB)
+Downloading torch (187.1MiB)
+ Downloaded setuptools
+ Downloaded networkx
+ Downloaded sympy
+ Downloaded torch
+Prepared 10 packages in 4.72s
+warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+         If the cache and target directories are on different filesystems, hardlinking may not be supported.
+         If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+Installed 10 packages in 18.78s
+ + filelock==3.32.3
+ + fsspec==2026.7.0
+ + jinja2==3.1.6
+ + markupsafe==3.0.3
+ + mpmath==1.3.0
+ + networkx==3.6.1
+ + setuptools==78.1.0
+ + sympy==1.14.0
+ + torch==2.14.0+cpu
+ + typing-extensions==4.16.0
+Using Python 3.11.16 environment at: lgvenv
+Resolved 59 packages in 679ms
+Downloading sqlalchemy (3.3MiB)
+Downloading pillow (6.6MiB)
+Downloading uvloop (3.6MiB)
+Downloading playwright (46.0MiB)
+Downloading fonttools (5.2MiB)
+Downloading opencv-contrib-python (64.7MiB)
+Downloading numpy (16.5MiB)
+Downloading pydantic-core (2.0MiB)
+Downloading mediapipe (32.0MiB)
+Downloading kiwisolver (1.4MiB)
+Downloading matplotlib (8.4MiB)
+Downloading scikit-learn (10.4MiB)
+Downloading scipy (34.6MiB)
+ Downloaded kiwisolver
+ Downloaded pydantic-core
+ Downloaded sqlalchemy
+ Downloaded uvloop
+ Downloaded fonttools
+ Downloaded pillow
+ Downloaded matplotlib
+ Downloaded scikit-learn
+ Downloaded numpy
+ Downloaded mediapipe
+ Downloaded scipy
+ Downloaded playwright
+ Downloaded opencv-contrib-python
+Prepared 49 packages in 3.23s
+warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+         If the cache and target directories are on different filesystems, hardlinking may not be supported.
+         If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+Installed 49 packages in 6.97s
+ + absl-py==2.5.0
+ + annotated-doc==0.0.5
+ + annotated-types==0.8.0
+ + anyio==4.15.1
+ + attrs==26.1.0
+ + cffi==2.1.1
+ + click==8.5.0
+ + contourpy==1.3.2
+ + cycler==0.12.1
+ + fastapi==0.141.1
+ + flatbuffers==25.12.19
+ + fonttools==4.65.0
+ + greenlet==3.5.6
+ + h11==0.16.0
+ + httptools==0.8.0
+ + idna==3.20
+ + joblib==1.3.1
+ + kiwisolver==1.5.1
+ + matplotlib==3.10.9
+ + mediapipe==0.10.5
+ + numpy==1.24.3
+ + opencv-contrib-python==4.8.0.74
+ + packaging==26.3
+ + pillow==12.3.0
+ + playwright==1.63.0
+ + protobuf==3.20.3
+ + pycparser==3.0
+ + pydantic==2.13.5
+ + pydantic-core==2.46.5
+ + pyee==13.0.1
+ + pyparsing==3.3.3
+ + pyserial==3.5
+ + python-dateutil==2.9.0.post0
+ + python-dotenv==1.2.3
+ + python-multipart==0.0.32
+ + pyttsx3==2.90
+ + pyyaml==6.0.3
+ + scikit-learn==1.3.0
+ + scipy==1.11.1
+ + six==1.17.0
+ + sounddevice==0.5.6
+ + sqlalchemy==2.0.54
+ + starlette==1.7.0
+ + threadpoolctl==3.7.0
+ + typing-inspection==0.4.4
+ + uvicorn==0.53.0
+ + uvloop==0.22.1
+ + watchfiles==1.3.0
+ + websockets==17.1
