@@ -73,7 +73,7 @@ type Status = {
 /**
  * Speaks what the stage shows, when it changes:
  * - warm-up finished: "Counting"
- * - a flagged rep: its short command ("Go deeper", "Chest up", "Full range")
+ * - a flagged rep: its short command ("Go deeper", "Chest up", "Knees out", "Slow down", ...)
  * - every 5th clean rep: "5 reps"
  * - fatigue indicator turns elevated: "Fatigue indicator up"
  * Nothing is spoken while learning depth (the first 3 slow squats).

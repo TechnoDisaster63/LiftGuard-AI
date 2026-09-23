@@ -90,3 +90,23 @@ Full backend (`pip install -r requirements.txt`): OpenCV stays pinned to `opencv
 Live session start is headless: it never asks for a name on the console and never opens an OpenCV window. It matches an already-enrolled face within about 8 seconds, otherwise it starts as Guest (including when no users are enrolled). New users are not enrolled from a web session start. A video file used as the camera source skips face ID so no frames of the clip are consumed. The desktop app (`run_standalone.py`) keeps its interactive identify and enrollment windows.
 
 Recording: one person, full body visible, fixed side-view camera, stable light, no mirrors or bystanders, 20-60 seconds. Use bodyweight or a safe light load with supervision; do not deliberately perform unsafe loaded form for a demo.
+
+## Coaching flags (knees, heels, depth drift, descent speed)
+
+Four flags beyond depth, trunk lean and range of motion. Each comes from a landmark measurement and is skipped, not guessed, when its view or landmarks are missing. Thresholds are in `AnalysisConfig`. They are coaching choices, not validated cut-offs.
+
+| Flag | Cue | Measurement | Fires when | Needs |
+|---|---|---|---|---|
+| `KNEES_CAVING` | Knees out | Knee gap / ankle gap, at the bottom (within 10° of the rep's deepest knee angle) vs upright just before the rep | bottom ratio < 0.9 x standing ratio | Front view (hip gap ≥ 0.21 x leg length), both knees and ankles visible |
+| `HEELS_LIFTING` | Heels down | Toe y minus heel y on the measured leg, vs upright just before the rep, as a share of standing leg length | 75th percentile rise during the rep > 4% of leg length | Side view, heel and toe visible |
+| `DEPTH_INCONSISTENT` | Match your depth | Rep's deepest knee angle vs the median of earlier reps this session | more than 15° shallower, after 3 reps; skipped if the rep is already `LIMITED_DEPTH` | 3 earlier reps |
+| `FAST_DESCENT` | Slow down | Time from the last frame at or above the standing threshold to crossing the bottom threshold | under 0.2 s | Always (counted in pose frames, so dropped frames make it look faster) |
+
+Per-rep evidence is in the report and CSV: `view`, `knee_width_ratio_bottom`, `knee_width_ratio_standing`, `heel_rise_ratio`, `descent_seconds`, `depth_vs_usual_deg`.
+
+What was measured:
+- Real front-view clip (15 normal squats): view detected as front on all 15. At the bottom the knee gap grew to about 1.45x its standing value (knees out), so no caving flag. No depth drift flag (largest drift +6.6°). Descent 0.24-0.44 s, so no fast-descent flag. The same clip with the left knee pulled toward the right at the bottom (landmarks edited, knee angle untouched) flags all 15 reps, live and offline.
+- Side-view clips in the fixtures have hip gaps of 0.02-0.19 x leg length, below the 0.21 front-view cut.
+- Heels, depth drift and descent speed are tested on synthetic traces only. There is no real clip yet of lifting heels or caving knees; a side-view recording with a deliberate heel lift is the next check.
+
+Not checked: back rounding. MediaPipe Pose has shoulders and hips on the torso but no spine points, so a rounded back and a straight back with the same lean look the same. The existing trunk-lean flag ("Chest up") is the only back measurement.
