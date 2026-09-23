@@ -97,5 +97,10 @@ Gym / weighted and plyometric category.
 | Box Step-Ups | Cataloged |
 | Plyometric (vertical) Jumps | Cataloged |
 | Lateral Bounds / Skater Jumps | Cataloged |
+| Pogos | Cataloged |
+| Broad Jumps | Cataloged |
+| Box Jumps | Cataloged |
 
 Pipeline notes: a 40 s segment is refused (pose visible in 25% of frames). MediaPipe found a body in 88% of frames, but the full shoulder-hip-knee-ankle chain was usable in only 25%: tight crops cut off the legs or head, equipment blocks joints, and cutaways show an interview and talking-to-camera shots. Once it also drew a skeleton on a seated interviewee. The coverage gate refused the clip correctly, and no squat reps were reported.
+
+Jump sections (45 s each, cut from the same video): see the PR that adds leg gates for current pipeline behavior.
