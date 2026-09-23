@@ -94,7 +94,7 @@ def test_session_manager_start_is_headless(monkeypatch):
     monkeypatch.setattr(cv2, "VideoCapture", lambda *_: OpenCap())
     manager = SessionManager.__new__(SessionManager)
     manager.engine = SimpleNamespace(user_manager=FakeUserManager(), session_active=False,
-                                     configure_live_squat=lambda fps: None)
+                                     configure_live_squat=lambda fps, mode="squat": None)
     manager.start(camera_id=0)
     assert calls["interactive"] is False
     assert calls["allow_new_user"] is False

@@ -11,6 +11,7 @@ label changes nothing.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 
@@ -26,10 +27,36 @@ def _pushup():
 
 MOVEMENT_MODES: dict[str, dict] = {
     "squat": {"label": "Squat", "noun": "squat", "source": "calibrated_squat_counter", "view": "side",
-              "counter": _squat},
+              "counter": _squat, "validated": True,
+              "watches": "depth, trunk lean, range of motion, knees, heels, tempo"},
     "pushup": {"label": "Push-up", "noun": "push-up", "source": "calibrated_pushup_counter", "view": "side",
-               "counter": _pushup},
+               "counter": _pushup, "validated": False,
+               "watches": "depth, hip line, tempo",
+               "pending": "Needs a check on a recorded side-view clip before it can be picked."},
 }
+
+DEFAULT_MODE = "squat"
+
+
+def preview_modes() -> set[str]:
+    """Unvalidated modes unlocked for development with LIFTGUARD_PREVIEW_MODES=pushup,..."""
+    raw = os.environ.get("LIFTGUARD_PREVIEW_MODES", "")
+    return {m.strip() for m in raw.split(",") if m.strip() in MOVEMENT_MODES}
+
+
+def is_selectable(mode: str) -> bool:
+    """A mode can be picked once it has passed a recorded-clip check (or is unlocked for development)."""
+    info = MOVEMENT_MODES.get(mode)
+    return bool(info) and (info["validated"] or mode in preview_modes())
+
+
+def modes_for_api() -> list[dict]:
+    return [
+        {"id": mode, "label": info["label"], "watches": info["watches"], "view": info["view"],
+         "validated": info["validated"], "selectable": is_selectable(mode),
+         "note": None if info["validated"] else info.get("pending")}
+        for mode, info in MOVEMENT_MODES.items()
+    ]
 
 # MM-Fit activity labels -> LiftGuard modes. Labels with no mode yet map to None.
 RECOGNIZER_LABELS: dict[str, str | None] = {

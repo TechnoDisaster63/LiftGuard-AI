@@ -201,7 +201,7 @@ class ContributionStore:
             "schema_version": SCHEMA_VERSION,
             "set_id": set_id,
             "anon_id": anon_id,
-            "movement_mode": MOVEMENT_MODE,
+            "movement_mode": getattr(recorder, "movement_mode", MOVEMENT_MODE),
             "created_at": _now_iso(),
             "app_version": app_version,
             "consent_version": consent["consent_version"],

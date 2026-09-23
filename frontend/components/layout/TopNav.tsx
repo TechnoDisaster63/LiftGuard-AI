@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useMovementMode } from "@/lib/movement";
 
 const NAV = [
   { href: "/dashboard", label: "Home" },
@@ -59,10 +60,17 @@ export function TopNav() {
           <span className="lg-dot" style={{ background: online === null ? "var(--lg-faint)" : online ? "var(--lg-mint)" : "var(--lg-amber)" }} />
           {online === null ? "Checking backend" : online ? "Backend online" : "Backend offline"}
         </span>
-        <span className="lg-chip lg-m" title="Movement mode. Squat is the only mode today.">
-          Mode · Squat
-        </span>
+        <ModeChip />
       </div>
     </header>
+  );
+}
+
+function ModeChip() {
+  const { current } = useMovementMode();
+  return (
+    <Link href="/settings" className="lg-chip lg-m" title="Movement mode. Change it in Settings.">
+      Mode · {current.label}
+    </Link>
   );
 }

@@ -14,6 +14,7 @@ class SessionStartRequest(BaseModel):
     model_complexity: Optional[int] = None
     process_every_n: Optional[int] = None
     use_temporal: Optional[bool] = None
+    movement_mode: Optional[str] = None
     # Opt-in data contribution. Only used when this anonymous id has given
     # consent (POST /api/contrib/consent); then the session's body landmarks
     # are saved when it stops. Never falls back to settings.

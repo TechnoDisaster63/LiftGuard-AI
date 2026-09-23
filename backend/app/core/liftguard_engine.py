@@ -1135,12 +1135,13 @@ class LiftGuardAI:
         self.frame_times.append(time.time() - start_time)
         return output
  
-    def configure_live_squat(self, source_fps=None):
-        """Reset the squat counter. ``source_fps`` is the video file's fps
-        (None for a webcam, where the processing rate is measured)."""
+    def configure_live_squat(self, source_fps=None, mode="squat"):
+        """Reset the rep counter for this session's movement mode. ``source_fps``
+        is the video file's fps (None for a webcam, where the processing rate
+        is measured)."""
         fps = source_fps / self.process_every_n if source_fps else None
-        self.live_squat = LiveSquatFeed(fps=fps)
-        self.current_exercise_status = LiveSquatFeed.warming_status()
+        self.live_squat = LiveSquatFeed(fps=fps, mode=mode)
+        self.current_exercise_status = LiveSquatFeed.warming_status(mode)
 
     def _update_live_squat(self, aspect):
         # A frame without a usable pose is still a frame: feeding None keeps

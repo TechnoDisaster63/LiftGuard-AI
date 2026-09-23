@@ -47,6 +47,11 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
     defaults = session_defaults.get()
     provided = req.model_dump(exclude_unset=True)
     merged = {**defaults, **{k: v for k, v in provided.items() if v is not None}}
+    from ..video_analysis.movements import DEFAULT_MODE, is_selectable
+
+    movement_mode = merged.get("movement_mode") or DEFAULT_MODE
+    if not is_selectable(movement_mode):
+        raise HTTPException(status_code=400, detail=f"Movement mode {movement_mode!r} can't be picked yet.")
 
     try:
         manager = await run_in_threadpool(
@@ -56,6 +61,7 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
             model_complexity=merged["model_complexity"],
             process_every_n=merged["process_every_n"],
             use_temporal=merged["use_temporal"],
+            movement_mode=movement_mode,
         )
     except Exception as exc:
         raise HTTPException(
@@ -117,8 +123,10 @@ def _contrib_recorder(req: SessionStartRequest, camera_id):
         if store.consent(req.contributor_id) is None:
             return None
         source = "browser" if camera_id == "browser" else ("webcam" if isinstance(camera_id, int) else "file")
-        return LandmarkRecorder(req.contributor_id, req.device_class or "unknown",
-                                req.camera_facing or "unknown", source)
+        recorder = LandmarkRecorder(req.contributor_id, req.device_class or "unknown",
+                                    req.camera_facing or "unknown", source)
+        recorder.movement_mode = req.movement_mode or session_defaults.get().get("movement_mode") or "squat"
+        return recorder
     except Exception:  # a bad id or unreadable store: just do not record
         return None
 

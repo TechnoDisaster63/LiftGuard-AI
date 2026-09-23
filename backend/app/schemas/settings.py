@@ -9,6 +9,7 @@ class SessionDefaults(BaseModel):
     model_complexity: int
     process_every_n: int
     use_temporal: bool
+    movement_mode: str = "squat"
 
 
 class SessionDefaultsPatch(BaseModel):
@@ -19,3 +20,4 @@ class SessionDefaultsPatch(BaseModel):
     model_complexity: int | None = None
     process_every_n: int | None = None
     use_temporal: bool | None = None
+    movement_mode: str | None = None

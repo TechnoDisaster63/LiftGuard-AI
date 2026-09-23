@@ -76,7 +76,7 @@ def test_session_start_with_browser_opens_no_device(monkeypatch):
     fps = []
     manager = SessionManager.__new__(SessionManager)
     manager.engine = SimpleNamespace(user_manager=FakeUserManager(), session_active=False,
-                                     configure_live_squat=fps.append)
+                                     configure_live_squat=lambda f, mode="squat": fps.append(f))
     manager.start(camera_id="browser")
     assert manager.active and manager.uses_browser_camera()
     assert fps == [None]  # the engine measures the real rate
