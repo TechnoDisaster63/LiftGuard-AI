@@ -50,6 +50,11 @@ KNOWN_LIMITS = [
     "A squat-like dip done in place without the feet moving (e.g. a jump that lands in the same spot) "
     "can still pass the rep checks.",
     "Knee angles are 2D image-plane angles, not 3D joint angles.",
+    "Coaching flags (knees caving, heels lifting, depth drift, fast descent) use simple thresholds that have "
+    "not been validated against a coach's labels. Knees caving needs a front view; heels lifting needs a side "
+    "view with the heel and toe visible. When the view or landmarks are missing, the flag is not checked.",
+    "Back rounding is not checked: the pose model has no points along the spine, so only overall trunk lean "
+    "is measured.",
 ]
 
 
@@ -80,6 +85,15 @@ class AnalysisConfig:
     other_knee_margin_deg: float = 20.0
     max_ankle_shift_fraction: float = 0.25
     standing_reference_seconds: float = 0.3
+    # Coaching flags beyond the core three (see _coaching_flags). Thresholds are
+    # coaching choices, not validated cut-offs.
+    coaching_flags: bool = True
+    front_view_min_hip_width: float = 0.21
+    knees_caving_max_ratio: float = 0.9
+    heel_rise_fraction: float = 0.04
+    depth_drift_deg: float = 15.0
+    depth_reference_reps: int = 3
+    fast_descent_seconds: float = 0.2
 
 
 class MediaPipePoseDetector:
@@ -153,7 +167,95 @@ def _metrics(points: Landmarks, min_visibility: float) -> dict | None:
     if all(name in points and points[name][2] >= min_visibility for name in other):
         metrics["other_knee_angle"] = round(angle(points["right_hip"], points["right_knee"], points["right_ankle"]), 2)
         metrics["other_ankle_xy"] = (round(points["right_ankle"][0], 5), round(points["right_ankle"][1], 5))
+    metrics.update(_coaching_metrics(points, min_visibility))
     return metrics
+
+
+def _coaching_metrics(points: Landmarks, min_visibility: float) -> dict:
+    """Per-frame inputs for the coaching flags; None when the landmarks are not visible.
+
+    - hip_dx: horizontal gap between the hips (frame-width units). Large in a
+      front view, near zero in a side view.
+    - knee_width_ratio: knee gap / ankle gap. Front view only; it drops when
+      the knees move in toward each other relative to the feet.
+    - heel_lift: toe y minus heel y (frame-height units) on the measured leg.
+      Near zero with the foot flat; grows when the heel comes up.
+    """
+    def seen(*names: str) -> bool:
+        return all(name in points and points[name][2] >= min_visibility for name in names)
+
+    out: dict = {"hip_dx": None, "knee_width_ratio": None, "heel_lift": None}
+    if seen("left_hip", "right_hip"):
+        out["hip_dx"] = round(abs(points["left_hip"][0] - points["right_hip"][0]), 5)
+    if seen("left_knee", "right_knee", "left_ankle", "right_ankle"):
+        ankle_gap = abs(points["left_ankle"][0] - points["right_ankle"][0])
+        if ankle_gap >= 0.01:
+            out["knee_width_ratio"] = round(abs(points["left_knee"][0] - points["right_knee"][0]) / ankle_gap, 4)
+    if seen("left_heel", "left_foot_index"):
+        out["heel_lift"] = round(points["left_foot_index"][1] - points["left_heel"][1], 5)
+    return out
+
+
+def _coaching_flags(since_standing: Sequence[dict], current: Sequence[dict], min_knee: float,
+                    earlier_reps: Sequence[dict], descent_seconds: float | None, leg_ref: float | None,
+                    aspect: float, config: AnalysisConfig, core_flags: Sequence[str],
+                    standing_knee_deg: float, reference_frames: int = 8) -> tuple[list[str], dict]:
+    """Coaching flags beyond depth, trunk lean and range. Returns (flags, evidence).
+
+    Each flag is checked only when its measurement exists for this rep:
+    - KNEES_CAVING: front view, and at the bottom the knees are closer together
+      than ``knees_caving_max_ratio`` x their gap while standing (ratio of the
+      knee gap to the ankle gap, so a wide or narrow stance does not matter).
+    - HEELS_LIFTING: side view, and the heel rises more than
+      ``heel_rise_fraction`` of standing leg length above its standing spot for
+      at least a quarter of the rep.
+    - DEPTH_INCONSISTENT: the rep is more than ``depth_drift_deg`` shallower
+      than the median of the earlier reps in this session. Skipped when the rep
+      is already LIMITED_DEPTH.
+    - FAST_DESCENT: going from the standing threshold to the bottom threshold
+      took under ``fast_descent_seconds``.
+    """
+    flags: list[str] = []
+    evidence: dict = {"view": None, "knee_width_ratio_bottom": None, "knee_width_ratio_standing": None,
+                      "heel_rise_ratio": None, "descent_seconds": None, "depth_vs_usual_deg": None}
+    # Standing reference: the upright frames just before this rep (not the
+    # start of the descent, which is also in since_standing).
+    upright = [m for m in since_standing if m["knee_angle"] >= standing_knee_deg]
+    before = upright[-reference_frames:] or list(since_standing[:reference_frames])
+    hip_widths = [m["hip_dx"] for m in current if m.get("hip_dx") is not None]
+    if leg_ref and hip_widths:
+        front = float(np.median(hip_widths)) * aspect / leg_ref >= config.front_view_min_hip_width
+        evidence["view"] = "front" if front else "side"
+    if evidence["view"] == "front":
+        near_bottom = [m["knee_width_ratio"] for m in current
+                       if m.get("knee_width_ratio") is not None and m["knee_angle"] <= min_knee + 10]
+        standing = [m["knee_width_ratio"] for m in before if m.get("knee_width_ratio") is not None]
+        if near_bottom and standing:
+            bottom_ratio = float(np.median(near_bottom))
+            standing_ratio = float(np.median(standing))
+            evidence["knee_width_ratio_bottom"] = round(bottom_ratio, 3)
+            evidence["knee_width_ratio_standing"] = round(standing_ratio, 3)
+            if standing_ratio > 0 and bottom_ratio < config.knees_caving_max_ratio * standing_ratio:
+                flags.append("KNEES_CAVING")
+    if evidence["view"] == "side" and leg_ref:
+        standing_heel = [m["heel_lift"] for m in before if m.get("heel_lift") is not None]
+        during = [m["heel_lift"] for m in current if m.get("heel_lift") is not None]
+        if standing_heel and len(during) >= 3:
+            rise = (float(np.percentile(during, 75)) - float(np.median(standing_heel))) / leg_ref
+            evidence["heel_rise_ratio"] = round(rise, 3)
+            if rise > config.heel_rise_fraction:
+                flags.append("HEELS_LIFTING")
+    depths = [r["min_knee_angle"] for r in earlier_reps]
+    if len(depths) >= config.depth_reference_reps:
+        drift = min_knee - float(np.median(depths))
+        evidence["depth_vs_usual_deg"] = round(drift, 1)
+        if drift > config.depth_drift_deg and "LIMITED_DEPTH" not in core_flags:
+            flags.append("DEPTH_INCONSISTENT")
+    if descent_seconds is not None:
+        evidence["descent_seconds"] = round(descent_seconds, 3)
+        if descent_seconds < config.fast_descent_seconds:
+            flags.append("FAST_DESCENT")
+    return flags, evidence
 
 
 def _form_flags(min_knee: float, max_trunk: float, rom: float) -> list[str]:
@@ -331,6 +433,7 @@ class RepStateMachine:
 
     def reset_phase(self) -> None:
         self.state, self.start_frame = "standing", 0
+        self.descent_seconds: float | None = None
         self.current: list[dict] = []
         self.since_standing: list[dict] = []
 
@@ -345,6 +448,7 @@ class RepStateMachine:
             if self.history_limit and len(self.since_standing) > self.history_limit:
                 del self.since_standing[: len(self.since_standing) - self.history_limit]
         if self.state == "standing" and knee <= thresholds["bottom_knee_deg"]:
+            self.descent_seconds = self._descent_seconds(thresholds)
             self.state, self.start_frame, self.current = "bottom", frame_index, [metrics]
             return None
         if not (self.state == "bottom" and knee >= thresholds["standing_knee_deg"]):
@@ -365,6 +469,12 @@ class RepStateMachine:
         if reason:
             self.log[f"rejected_{reason}"] += 1
         else:
+            core = _form_flags(min_knee, max_trunk, rom)
+            extra, coaching = ([], {})
+            if config.coaching_flags:
+                extra, coaching = _coaching_flags(self.since_standing, current, min_knee, self.reps,
+                                                  self.descent_seconds, leg_ref, self.aspect, config, core,
+                                                  thresholds["standing_knee_deg"], self.reference_frames)
             rep = {
                 "rep": len(self.reps) + 1,
                 "start_seconds": round(self.start_frame / fps, 3),
@@ -373,15 +483,29 @@ class RepStateMachine:
                 "min_knee_angle": round(min_knee, 1),
                 "max_trunk_lean": round(max_trunk, 1),
                 "rom_degrees": round(rom, 1),
-                "form_flags": _form_flags(min_knee, max_trunk, rom),
+                "form_flags": core + extra,
                 "hip_drop_ratio": evidence.get("hip_drop_ratio"),
                 "other_min_knee_angle": evidence.get("other_min_knee_angle"),
                 "ankle_shift_ratio": evidence.get("ankle_shift_ratio"),
+                **coaching,
                 "_end_frame": frame_index,
             }
             self.reps.append(rep)
         self.state, self.current, self.since_standing = "standing", [], [metrics]
         return rep
+
+    def _descent_seconds(self, thresholds: dict) -> float | None:
+        """Time from the last frame at or above the standing threshold to now.
+
+        Counted in pose frames, so frames with no pose are left out and a gap
+        makes the descent look faster. None when the standing point is not in
+        the kept history.
+        """
+        frames = self.since_standing
+        for back, m in enumerate(reversed(frames[:-1]), start=1):
+            if m["knee_angle"] >= thresholds["standing_knee_deg"]:
+                return back / self.fps
+        return None
 
 
 def leg_reference(metrics: Sequence[dict], config: AnalysisConfig) -> float | None:
@@ -568,7 +692,7 @@ def analyze_video(
     }
     (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     with (out / "reps.csv").open("w", newline="", encoding="utf-8") as handle:
-        fields = ["rep", "start_seconds", "end_seconds", "duration_seconds", "min_knee_angle", "max_trunk_lean", "rom_degrees", "hip_drop_ratio", "other_min_knee_angle", "ankle_shift_ratio", "form_flags"]
+        fields = ["rep", "start_seconds", "end_seconds", "duration_seconds", "min_knee_angle", "max_trunk_lean", "rom_degrees", "hip_drop_ratio", "other_min_knee_angle", "ankle_shift_ratio", "view", "knee_width_ratio_bottom", "knee_width_ratio_standing", "heel_rise_ratio", "descent_seconds", "depth_vs_usual_deg", "form_flags"]
         writer_csv = csv.DictWriter(handle, fieldnames=fields)
         writer_csv.writeheader()
         for rep in reps:

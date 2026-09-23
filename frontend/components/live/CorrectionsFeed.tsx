@@ -20,6 +20,10 @@ const FLAG_TEXT: Record<string, string> = {
   LIMITED_DEPTH: "Last rep: limited depth",
   EXCESSIVE_TRUNK_LEAN: "Last rep: trunk lean",
   LOW_RANGE_OF_MOTION: "Last rep: low range of motion",
+  KNEES_CAVING: "Last rep: knees caving in",
+  HEELS_LIFTING: "Last rep: heels lifting",
+  DEPTH_INCONSISTENT: "Last rep: shallower than usual",
+  FAST_DESCENT: "Last rep: fast descent",
 };
 
 // Live cues and the last counted rep's form-risk flags are shown together so

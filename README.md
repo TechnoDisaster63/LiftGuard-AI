@@ -49,7 +49,7 @@ Logs for every platform go to `.liftguard/`.
 |---|---|
 | **Rep counting** | Counts squats live from a webcam or a video file. There are no fixed thresholds: each session calibrates to the person's own depth and the camera angle from the last 30 seconds of movement. |
 | **Rejecting reps that aren't squats** | A counted rep has to keep the feet planted, lower the hips and bend both knees, so knee lifts, jump dips and bobbing don't count. Rejected attempts are reported with the reason. |
-| **Form-risk flags** | Each rep can be flagged `LIMITED_DEPTH` (knee angle stays above 110°), `EXCESSIVE_TRUNK_LEAN` (trunk above 45°) or `LOW_RANGE_OF_MOTION` (under 45° of movement). The rules are simple on purpose, so every flag can be explained. |
+| **Form-risk flags** | Each rep can be flagged `LIMITED_DEPTH` (knee angle stays above 110°), `EXCESSIVE_TRUNK_LEAN` (trunk above 45°) or `LOW_RANGE_OF_MOTION` (under 45° of movement). Four coaching flags come from the same landmarks: `KNEES_CAVING` ("Knees out": front view, knee gap shrinks below 90% of its standing value), `HEELS_LIFTING` ("Heels down": side view, heel rises more than 4% of leg length), `DEPTH_INCONSISTENT` ("Match your depth": 15° shallower than your usual rep this session) and `FAST_DESCENT` ("Slow down": dropping into the bottom in under 0.2 s). A flag is only checked when its view and landmarks are there. The rules are simple on purpose, so every flag can be explained. |
 | **Fatigue indicator** | A 0-100 score for how far rep time, depth and trunk lean drift from the first reps. It stays blank until there are enough reps to compare. |
 | **Voice cues** | Optional spoken corrections through the laptop's speech engine. Cues have cooldowns so it doesn't talk over the lifter. |
 | **Face-ID registration** | Register a lifter from the browser's camera in about six seconds. Sessions then start under their name, and anyone else trains as Guest. Uses OpenCV face recognition and stays on the machine. |
@@ -81,7 +81,8 @@ The live counter and the offline analyzer share one engine (`backend/app/video_a
 
 - **Squat only.** Other movements aren't recognised yet. The screen says "Detecting squat..." until the first real rep.
 - **2D angles.** Joint angles are measured in the image plane, not in 3D. A side view works best. Keep the whole body in frame, in one continuous shot: a camera cut or zoom can fake or hide a rep.
-- **Not validated as a medical or biomechanical tool.** The thresholds were checked on development clips and synthetic tests, not in a clinical study.
+- **Not validated as a medical or biomechanical tool.** The thresholds were checked on development clips and synthetic tests, not in a clinical study. The four coaching flags were checked on one real front-view clip (no false flags on 15 normal squats) and on synthetic faults; there is no real clip yet of caving knees or lifting heels.
+- **No back-rounding check.** The pose model has no points along the spine, so LiftGuard measures overall trunk lean ("Chest up") but cannot tell a rounded back from a straight one.
 - **Experimental, off by default:** the pan-tilt laser (Arduino / ESP32) and the older TCN risk model. No trained weights ship for the model, so the dashboard shows none of its output.
 - **Face recognition** is OpenCV's LBPH recogniser. Fine for telling apart a few registered lifters on one machine. Not an identity or security check.
 - **One camera session at a time** per backend.
@@ -100,7 +101,7 @@ cd backend && pip install -r requirements-dev.txt && pytest -q && ruff check app
 cd frontend && npm ci && npx tsc --noEmit && npm run build
 ```
 
-The backend suite has 67 tests. They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
+The backend suite has 88 tests. They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), each coaching flag firing on its fault and staying quiet on normal reps, report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
 
 Manual start, if you'd rather not use the launcher:
 

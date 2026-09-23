@@ -81,4 +81,8 @@ export const FLAG_CUE: Record<string, { cue: string; why: string }> = {
   LIMITED_DEPTH: { cue: "Go deeper", why: "Knee stayed above 110° at the bottom" },
   EXCESSIVE_TRUNK_LEAN: { cue: "Chest up", why: "Trunk leaned past 45°" },
   LOW_RANGE_OF_MOTION: { cue: "Full range", why: "Knee moved less than 45° in the rep" },
+  KNEES_CAVING: { cue: "Knees out", why: "Knees moved in toward each other at the bottom" },
+  HEELS_LIFTING: { cue: "Heels down", why: "Heel came up off the floor" },
+  DEPTH_INCONSISTENT: { cue: "Match your depth", why: "15° shallower than your usual rep" },
+  FAST_DESCENT: { cue: "Slow down", why: "Dropped into the squat in under 0.2 s" },
 };
