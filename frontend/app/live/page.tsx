@@ -10,6 +10,8 @@ import { unlockVoice, useVoiceCues, useVoiceSetting } from "@/lib/voice";
 import { countVideoInputs, defaultFacing, flipDeviceCamera, openDeviceCamera, rememberFacing, stopDeviceCamera, streamFacing, useFrameUplink, type Facing } from "@/lib/deviceCamera";
 import { Alert, FLAG_CUE, Spinner } from "@/components/lg/ui";
 import { ContributeCard } from "@/components/contrib/ContributeCard";
+import { SetRatingCard } from "@/components/contrib/SetRatingCard";
+import type { ContributionSet } from "@/lib/api";
 import { contribStartFields } from "@/lib/contrib";
 
 type StageState = "idle" | "counting" | "clean" | "flagged" | "fatigue";
@@ -65,6 +67,7 @@ function LiveInner() {
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
+  const [savedSet, setSavedSet] = useState<ContributionSet | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   // "Help train LiftGuard": the backend says at start whether this
   // session's body points are being saved; the chip shows exactly that.
@@ -150,6 +153,7 @@ function LiveInner() {
     setStarting(true);
     setError(null);
     setSavedSessionId(null);
+    setSavedSet(null);
     try {
       // Zero choices: find the camera that actually sends video.
       const res = await startWithCamera((_index, attempt, total) =>
@@ -172,6 +176,7 @@ function LiveInner() {
     setStarting(true);
     setError(null);
     setSavedSessionId(null);
+    setSavedSet(null);
     let stream: MediaStream | null = null;
     try {
       setTrying("Asking for camera permission");
@@ -197,8 +202,9 @@ function LiveInner() {
     setStopping(true);
     setMenuOpen(false);
     try {
-      await api.sessions.stop(id);
+      const out = await api.sessions.stop(id);
       setSavedSessionId(id);
+      setSavedSet(out.contribution ?? null);
     } catch (e) {
       // 404: the backend already dropped it (e.g. restarted) - nothing to save.
       setError(`The session stopped, but it may not have been saved. ${e instanceof Error ? e.message : ""}`.trim());
@@ -340,7 +346,6 @@ function LiveInner() {
         </div>
         <div className="flex flex-col gap-4">
           {error && <Alert>{error}</Alert>}
-          <ContributeCard />
           {savedSessionId && (
             <div className="lg-card lg-fade">
               <div className="lg-m" style={{ color: "var(--lg-mint)" }}>
@@ -356,6 +361,8 @@ function LiveInner() {
               </div>
             </div>
           )}
+          {savedSet && <SetRatingCard key={savedSet.set_id} set={savedSet} />}
+          <ContributeCard />
           <div className="lg-card">
             <div className="lg-m lg-dim mb-3">During a session</div>
             {KEY_HELP.map(([k, v]) => (

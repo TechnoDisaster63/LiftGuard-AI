@@ -217,3 +217,9 @@ body { font-family: var(--font-geist), system-ui, sans-serif; }
 .lg-check input { width: 22px; height: 22px; accent-color: var(--lg-mint); }
 .lg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .lg-code { font-family: var(--font-geist-mono, ui-monospace, monospace); font-size: 13px; background: var(--lg-p2); border-radius: 8px; padding: 8px 10px; word-break: break-all; }
+.lg-choice-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.lg-choice { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--lg-line); background: transparent; color: var(--lg-ink); font-size: 15px; cursor: pointer; }
+.lg-choice:hover { border-color: rgba(244, 243, 238, 0.3); }
+.lg-choice.on { background: var(--lg-ink); color: #0a0a0b; border-color: var(--lg-ink); }
+.lg-choice.hurt.on { background: var(--lg-amber); border-color: var(--lg-amber); }
+.lg-choice:disabled { opacity: 0.5; }
