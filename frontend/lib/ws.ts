@@ -68,6 +68,9 @@ export function useLiveSession(sessionId: string | null) {
   const [telemetry, setTelemetry] = useState<TelemetryPayload | null>(null);
   const [state, setState] = useState<ConnectionState>("idle");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  // Set when the stream ends for a reason the user must see (camera lost,
+  // video file finished, engine error). Not cleared by toasts.
+  const [fatalError, setFatalError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const lastObjectUrl = useRef<string | null>(null);
 
@@ -78,6 +81,10 @@ export function useLiveSession(sessionId: string | null) {
   }, []);
 
   useEffect(() => {
+    // New or ended session: drop the previous session's last frame and
+    // numbers so a stopped session doesn't look live.
+    setTelemetry(null);
+    setFrameUrl(null);
     if (!sessionId) return;
 
     const wsBase = API_BASE.replace(/^http/, "ws");
@@ -86,10 +93,24 @@ export function useLiveSession(sessionId: string | null) {
     const ws = new WebSocket(url);
     wsRef.current = ws;
     setState("connecting");
+    setFatalError(null);
+    let closedByUs = false;
 
     ws.onopen = () => setState("open");
     ws.onerror = () => setState("error");
-    ws.onclose = () => setState("closed");
+    ws.onclose = (event) => {
+      setState("closed");
+      if (closedByUs) return;
+      if (event.code === 4401) {
+        setFatalError("The backend refused the live stream: wrong or missing API key.");
+      } else if (event.code === 4404) {
+        setFatalError("The backend no longer has this session (it was stopped or the backend restarted).");
+      } else if (event.code === 4429) {
+        setFatalError("This session is already open in another tab or window.");
+      } else if (event.code === 1006) {
+        setFatalError("Lost the connection to the backend. Is it still running?");
+      }
+    };
 
     ws.onmessage = (event) => {
       try {
@@ -108,7 +129,8 @@ export function useLiveSession(sessionId: string | null) {
         } else if (msg.type === "control_ack") {
           pushToast(msg.message, "info");
         } else if (msg.type === "error") {
-          pushToast(msg.message, "error");
+          if (msg.fatal) setFatalError(msg.message);
+          else pushToast(msg.message, "error");
         }
       } catch {
         // ignore malformed frame — next message will self-correct
@@ -116,6 +138,7 @@ export function useLiveSession(sessionId: string | null) {
     };
 
     return () => {
+      closedByUs = true;
       ws.close();
       if (lastObjectUrl.current) URL.revokeObjectURL(lastObjectUrl.current);
     };
@@ -127,5 +150,5 @@ export function useLiveSession(sessionId: string | null) {
     }
   }, []);
 
-  return { frameUrl, telemetry, state, sendControl, toasts };
+  return { frameUrl, telemetry, state, sendControl, toasts, fatalError };
 }

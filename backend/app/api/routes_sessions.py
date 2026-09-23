@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -25,17 +26,38 @@ _sessions: dict[str, SessionManager] = {}
 async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db)):
     # Anything the caller didn't specify falls back to the current
     # /api/settings values, not a hardcoded default.
+    # One laptop, one camera: a second session would fight the first for the
+    # same device (on Windows the second open fails or returns black frames).
+    # A session nobody is watching (tab closed or refreshed, or the video
+    # ended) is finished and saved here instead of blocking the camera until
+    # the backend restarts. One that is being watched is left alone.
+    for old_id, old in list(_sessions.items()):
+        if old.has_viewer() or time.monotonic() - getattr(old, "started_monotonic", 0) < ORPHAN_GRACE_S:
+            raise HTTPException(
+                status_code=409,
+                detail="A live session is already running in another tab or window. "
+                "Stop it there before starting another.",
+            )
+        await _finish_session(old_id, db)
     defaults = session_defaults.get()
     provided = req.model_dump(exclude_unset=True)
     merged = {**defaults, **{k: v for k, v in provided.items() if v is not None}}
 
-    manager = SessionManager(
-        voice_enabled=merged["voice_enabled"],
-        arduino_enabled=merged["arduino_enabled"],
-        model_complexity=merged["model_complexity"],
-        process_every_n=merged["process_every_n"],
-        use_temporal=merged["use_temporal"],
-    )
+    try:
+        manager = await run_in_threadpool(
+            SessionManager,
+            voice_enabled=merged["voice_enabled"],
+            arduino_enabled=merged["arduino_enabled"],
+            model_complexity=merged["model_complexity"],
+            process_every_n=merged["process_every_n"],
+            use_temporal=merged["use_temporal"],
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"The analysis engine failed to load ({type(exc).__name__}: {exc}). "
+            "Check that the backend requirements are installed.",
+        ) from exc
     try:
         # manager.start() can block on headless face-ID (up to 8s) — run it in a
         # threadpool so it doesn't stall the event loop for every other
@@ -44,8 +66,14 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
         await run_in_threadpool(manager.start, camera_id=merged["camera_id"])
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        manager.stop_quietly()
+        raise HTTPException(
+            status_code=500, detail=f"Couldn't start the session ({type(exc).__name__}: {exc})"
+        ) from exc
 
     session_id = str(uuid.uuid4())
+    manager.started_monotonic = time.monotonic()
     _sessions[session_id] = manager
 
     user = getattr(manager.engine, "current_user", None)
@@ -65,15 +93,37 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
 
 @router.post("/{session_id}/stop")
 async def stop_session(session_id: str, db: DBSession = Depends(get_db)):
-    manager = _sessions.get(session_id)
-    if manager is None:
+    if session_id not in _sessions:
         raise HTTPException(status_code=404, detail="Session not found")
+    await _finish_session(session_id, db)
+    return {"status": "stopped"}
 
-    report = manager.get_session_report()
-    # stop() blocks briefly on cap.release() and Arduino serial I/O — worth
-    # keeping off the event loop for the same reason as start().
-    await run_in_threadpool(manager.stop)
-    del _sessions[session_id]
+
+# Seconds after start during which an unwatched session still counts as
+# running (the page opens its WebSocket right after /start returns).
+ORPHAN_GRACE_S = 15.0
+
+
+async def _finish_session(session_id: str, db: DBSession) -> None:
+    manager = _sessions.get(session_id)
+    if manager is None:  # already finished by a concurrent stop
+        return
+
+    # Always free the camera and drop the session, even if building the
+    # report or stopping hardware fails; otherwise the camera stays locked
+    # and every later Start returns 409.
+    try:
+        report = manager.get_session_report()
+    except Exception as exc:  # keep stopping; save what we can
+        report = {"exercise": {"error": f"report failed: {exc}"}}
+    try:
+        # stop() blocks briefly on cap.release() and Arduino serial I/O — worth
+        # keeping off the event loop for the same reason as start().
+        await run_in_threadpool(manager.stop)
+    except Exception:
+        await run_in_threadpool(manager.stop_quietly)
+    finally:
+        _sessions.pop(session_id, None)
 
     record = db.query(SessionRecord).filter_by(session_id=session_id).first()
     if record is not None:
@@ -90,8 +140,6 @@ async def stop_session(session_id: str, db: DBSession = Depends(get_db)):
             record.display_name = report["user"].get("display_name", record.display_name)
             record.is_guest = report["user"].get("is_guest", record.is_guest)
         db.commit()
-
-    return {"status": "stopped"}
 
 
 @router.get("/{session_id}/report", response_model=SessionReport)

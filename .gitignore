@@ -30,3 +30,6 @@ tsconfig.tsbuildinfo
 # Atomic/recovery files written by local settings persistence
 backend/data/*.tmp
 backend/data/*.corrupt
+
+# CSV exports written by the live page EXPORT button
+backend/exports/

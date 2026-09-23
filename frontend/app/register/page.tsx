@@ -12,7 +12,13 @@ import { SparklesCore } from "@/components/ui/sparkles";
 type Step = "name" | "preview" | "countdown" | "capturing" | "submitting" | "success" | "error";
 
 const CAPTURE_DURATION_MS = 6000;
-const CAPTURE_INTERVAL_MS = 150;
+// 6 s at 250 ms = 24 frames. The backend accepts at most 30 per request
+// (LIFTGUARD_MAX_REGISTER_IMAGES) and needs at least 10 with a face.
+const CAPTURE_INTERVAL_MS = 250;
+const MAX_CAPTURE_FRAMES = 28;
+// Downscale before upload: face detection doesn't need 1080p, and smaller
+// frames keep the request fast on a laptop.
+const CAPTURE_MAX_WIDTH = 640;
 
 export default function RegisterPage() {
   const [step, setStep] = useState<Step>("name");
@@ -118,8 +124,10 @@ export default function RegisterPage() {
 
     const captureFrame = () => {
       if (!canvas || !video || video.videoWidth === 0) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      if (framesRef.current.length >= MAX_CAPTURE_FRAMES) return;
+      const scale = Math.min(1, CAPTURE_MAX_WIDTH / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
