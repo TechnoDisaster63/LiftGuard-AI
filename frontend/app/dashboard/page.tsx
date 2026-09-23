@@ -6,17 +6,20 @@ import { api, SessionDefaults, UserOut } from "@/lib/api";
 import { useBackendOnline } from "@/components/layout/TopNav";
 import { useSessionRows, FATIGUE_LABEL } from "@/lib/history";
 import { Split, fmtDate } from "@/components/lg/ui";
+import { getCameraPin } from "@/lib/camera";
 
 export default function DashboardPage() {
   const online = useBackendOnline();
   const [defaults, setDefaults] = useState<SessionDefaults | null>(null);
   const [users, setUsers] = useState<UserOut[] | null>(null);
   const [active, setActive] = useState<string[]>([]);
+  const [camPin, setCamPin] = useState<number | null>(null);
   const { rows } = useSessionRows({ limit: 1 });
   const last = rows?.[0] ?? null;
 
   useEffect(() => {
     api.settings.get().then(setDefaults).catch(() => {});
+    setCamPin(getCameraPin());
     api.users.list().then(setUsers).catch(() => setUsers(null));
     api.sessions.list().then((r) => setActive(r.active_sessions)).catch(() => {});
   }, []);
@@ -24,7 +27,7 @@ export default function DashboardPage() {
   const pre: [string, string, string][] = [
     ["Movement mode", "Squat", "var(--lg-ink)"],
     ["Backend", online === null ? "Checking" : online ? "Online" : "Offline", online ? "var(--lg-mint)" : online === false ? "var(--lg-amber)" : "var(--lg-faint)"],
-    ["Camera", defaults ? `Index ${defaults.camera_id} · opens at start` : "—", "var(--lg-dim)"],
+    ["Camera", camPin !== null ? `Fixed to camera ${camPin}` : "Finds it automatically at start", camPin !== null ? "var(--lg-amber)" : "var(--lg-dim)"],
     ["Voice cues", defaults ? (defaults.voice_enabled ? "On" : "Off") : "—", defaults?.voice_enabled ? "var(--lg-mint)" : "var(--lg-faint)"],
     ["Laser pointer", defaults ? (defaults.arduino_enabled ? "Tries to connect at start" : "Off") : "—", defaults?.arduino_enabled ? "var(--lg-dim)" : "var(--lg-faint)"],
     ["Face ID", users ? (users.length ? `${users.length} ${users.length === 1 ? "person" : "people"} enrolled` : "Nobody enrolled · guest") : "—", users?.length ? "var(--lg-mint)" : "var(--lg-faint)"],
