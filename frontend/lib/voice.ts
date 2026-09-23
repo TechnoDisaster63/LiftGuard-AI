@@ -91,13 +91,14 @@ export function useVoiceCues(status: Status | null, enabled: boolean) {
     prev.current = { warm, rep, fatigue: status.fatigueStatus };
     if (!p || !enabled) return; // first telemetry only sets the baseline
     const flags = status.lastRep?.form_flags ?? [];
-    if (rep != null && rep !== p.rep) {
-      const cue = flags.length ? FLAG_CUE[flags[0]]?.cue : null;
-      if (cue) speak(cue);
-      else if (rep % 5 === 0) speak(`${rep} reps`);
-    } else if (p.warm && !warm) {
-      speak("Counting");
-    } else if (status.fatigueStatus === "ELEVATED" && p.fatigue !== "ELEVATED") {
+    const newRep = rep != null && rep !== p.rep;
+    const cue = newRep && flags.length ? FLAG_CUE[flags[0]]?.cue : null;
+    // Warm-up often ends on the same update that counts the first reps, so
+    // check it alongside a new rep, not instead of it. A flag wins.
+    if (cue) speak(cue);
+    else if (p.warm && !warm) speak("Counting");
+    else if (newRep && rep % 5 === 0) speak(`${rep} reps`);
+    else if (status.fatigueStatus === "ELEVATED" && p.fatigue !== "ELEVATED") {
       speak("Fatigue indicator up");
     }
   }, [status, enabled]);
