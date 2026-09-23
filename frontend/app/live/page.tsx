@@ -76,7 +76,7 @@ function LiveInner() {
       setSessionId(res.sessionId);
     } catch (e) {
       // The backend's message already says what went wrong and what to check.
-      setError(`Couldn't start the session. ${e instanceof Error ? e.message : ""}`.trim());
+      setError(e instanceof Error && /^(No camera found|Camera \d)/.test(e.message) ? e.message : `Couldn't start the session. ${e instanceof Error ? e.message : ""}`.trim());
     } finally {
       setStarting(false);
       setTrying(null);

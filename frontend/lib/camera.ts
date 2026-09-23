@@ -73,10 +73,9 @@ export async function startWithCamera(
     }
   }
   if (pin !== null) {
+    void lastError;
     throw new Error(
-      `Camera ${pin} (pinned in Settings) isn't sending video. Switch Settings > Camera back to Automatic, or check that camera. ${
-        lastError instanceof Error ? lastError.message : ""
-      }`.trim()
+      `Camera ${pin} isn't sending video. It's fixed in Settings > Camera - switch it back to Auto, or check that camera is plugged in and free.`
     );
   }
   throw new Error(NO_CAMERA_MESSAGE);
