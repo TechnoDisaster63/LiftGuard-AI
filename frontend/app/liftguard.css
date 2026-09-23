@@ -156,3 +156,50 @@ body { font-family: var(--font-geist), system-ui, sans-serif; }
 .lg-tile.n { background: transparent; border: 2px dashed rgba(255,255,255,.4); }
 .lg-tile.new { animation: lg-pop 0.35s cubic-bezier(0.3, 1.4, 0.5, 1); }
 @keyframes lg-pop { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Session controls: every keyboard shortcut is also a tap target. */
+.lg-keybtn { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.22); background: rgba(0,0,0,.35); color: inherit; font: inherit; cursor: pointer; }
+.lg-keybtn:hover { border-color: rgba(255,255,255,.45); }
+.lg-keybtn:disabled { opacity: .45; cursor: default; }
+/* Touch screens: no keyboard, so no key hints; bigger targets. */
+@media (hover: none) and (pointer: coarse) {
+  .lg-keyhint, .lg-btn kbd { display: none; }
+  .lg-keybtn { min-height: 44px; padding: 10px 14px; }
+  .lg-stage .lg-chip { min-height: 40px; }
+}
+/* Phones: keep the controls on screen instead of running off the edge. */
+@media (max-width: 720px) {
+  .lg-stage-top { left: 14px; right: 14px; top: 14px; gap: 8px; }
+  .lg-stage-bottom { left: 14px; right: 14px; bottom: 14px !important; gap: 12px; }
+  .lg-stage-keys { margin-left: 0; width: 100%; }
+}
+/* Phones: one column, nav scrolls sideways, device camera first. */
+@media (max-width: 720px) {
+  .lg-main { padding-left: 14px; padding-right: 14px; padding-top: 10px; }
+  .lg-nav { padding-left: 14px; padding-right: 14px; gap: 14px; flex-wrap: wrap; }
+  .lg-navlinks { order: 3; width: 100%; overflow-x: auto; gap: 18px; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .lg-navlinks a { flex: none; }
+  .lg-nav a.lg-navlink { font-size: 17px; }
+  .lg-ready { grid-template-columns: minmax(0, 1fr) !important; min-height: 0 !important; }
+  .lg-ready-hero { padding: 22px; min-height: 62vh; }
+  .lg-ready-actions { flex-direction: column; align-items: stretch; }
+  .lg-ready-actions .lg-btn { justify-content: center; }
+  .lg-ready-actions .lg-btn:not(.lg-start-device) { background: transparent; color: var(--lg-ink); border-color: rgba(244,243,238,.25); }
+  .lg-start-device { order: -1; padding: 16px 24px; font-size: 16px; border-radius: 14px; background: var(--lg-ink); color: #0b0b0c; }
+}
+/* Phone held upright during a session: scale the big type to the width,
+   keep the depth bar and the controls clear of each other. */
+@media (max-width: 720px) {
+  .lg-hide-sm { display: none !important; }
+  .lg-stage-num { right: 40px; top: 16vh; font-size: min(62vh, 52vw); }
+  .lg-stage-cue { right: 40px; top: 50vh; font-size: min(10vh, 13vw); }
+  .lg-stage-sub { right: 40px; left: 14px; top: 58vh !important; }
+  .lg-stage-idle { right: 40px; left: 14px; top: 26vh; font-size: min(16vh, 13vw); }
+  .lg-depth { right: 12px; top: 26vh; height: 40vh; width: 16px; }
+  .lg-depth-label { right: 2px !important; top: 67vh !important; }
+  .lg-stage-disclaimer { top: auto !important; bottom: 4px; left: 14px; }
+  .lg-stage-bottom { bottom: 22px !important; gap: 10px; }
+  .lg-stage-fatigue { min-width: 0 !important; }
+  .lg-stage-fatigue .lg-d { font-size: 22px !important; }
+  .lg-stage-toasts { bottom: auto !important; top: 64vh; width: 90vw; }
+  .lg-tile { width: 22px; height: 30px; }
+}
