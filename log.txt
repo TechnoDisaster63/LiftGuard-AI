@@ -1,0 +1,2 @@
+report url http://localhost:3001/reports?history=6b177d8c-ade2-44e8-ae1b-8ce93f9f6e58
+report text: 13 | SQUAT REPS · 23 SEPT, 11:20 · GUEST · CAMERA 0 | ALL CLEAN | 13 reps clean. Flags come from depth, trunk lean and range of motion. | SPINE FLEXION OVER THE SESSION | DEGREES | 25° | AVERAGES PER REP | Rep time | 1.1S | Deepest knee angle | 32° | Range of motion | 124° | Movements not counted | 0 | FATIGUE INDICATOR | STEADY | 0 | /
