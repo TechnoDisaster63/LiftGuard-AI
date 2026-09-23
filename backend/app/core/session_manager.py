@@ -67,8 +67,14 @@ class SessionManager:
         # Same face-ID call as the desktop run(). Blocking is acceptable -
         # start() runs once, off the per-frame loop.
         if hasattr(self.engine, "user_manager"):
+            # Headless: a web request has no console for input() and no
+            # desktop for cv2.imshow. Enrolled users are matched; otherwise
+            # the session starts as Guest. A video file source skips face ID
+            # so no frames of the clip are consumed before analysis.
+            is_file = isinstance(camera_id, str) and not camera_id.isdigit()
             self.engine.current_user = self.engine.user_manager.identify_from_camera(
-                self.cap, timeout=25.0, allow_new_user=True, allow_guest=True
+                self.cap, timeout=0.0 if is_file else 8.0,
+                allow_new_user=False, allow_guest=True, interactive=False
             )
             if getattr(self.engine.current_user, "baseline", None):
                 self.engine.risk_classifier.calibrate_to_person(

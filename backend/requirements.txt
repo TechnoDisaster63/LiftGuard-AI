@@ -1,13 +1,20 @@
 # ── Original AI/CV dependencies (unchanged versions) ──────────
 # opencv-contrib-python replaces opencv-python: user_manager_lite.py uses
 # cv2.face.LBPHFaceRecognizer_create(), which only ships in the contrib build.
+# Keep OpenCV pinned: newer builds (5.x) break Haar cascade loading and
+# cv2.face. Python 3.11 is the documented target. The 3.12 line uses the
+# nearest releases that publish 3.12 wheels.
 opencv-contrib-python==4.8.0.74
-mediapipe==0.10.5
-numpy==1.24.3
-scikit-learn==1.3.0
+mediapipe==0.10.5; python_version < "3.12"
+mediapipe==0.10.14; python_version >= "3.12"
+numpy==1.24.3; python_version < "3.12"
+numpy==1.26.4; python_version >= "3.12"
+scikit-learn==1.3.0; python_version < "3.12"
+scikit-learn==1.3.2; python_version >= "3.12"
 pyttsx3==2.90
 joblib==1.3.1
-scipy==1.11.1
+scipy==1.11.1; python_version < "3.12"
+scipy==1.11.4; python_version >= "3.12"
 
 # ── Additional deps actually imported by the source but missing from the
 #    original requirements.txt (tcn_model.py/train_tcn.py, arduino_controller.py) ──
