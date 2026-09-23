@@ -84,14 +84,38 @@ export interface UserRegisterResponse {
   status: string;
 }
 
+/** An API failure whose message is safe to show as-is. */
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: jsonHeaders(),
-    ...options,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: jsonHeaders(),
+      ...options,
+    });
+  } catch {
+    throw new ApiError(
+      `Can't reach the LiftGuard backend at ${API_BASE}. Is it running? (see README: uvicorn app.main:app)`,
+      0
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    let detail = body;
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed?.detail === "string") detail = parsed.detail;
+      else if (Array.isArray(parsed?.detail)) detail = parsed.detail.map((d: { msg?: string }) => d.msg).join("; ");
+    } catch {
+      // not JSON - keep the raw text
+    }
+    throw new ApiError(detail || `${res.status} ${res.statusText}`, res.status);
   }
   return res.json() as Promise<T>;
 }

@@ -85,6 +85,12 @@ def test_session_manager_start_is_headless(monkeypatch):
         def get(self, *_):
             return 25.0
 
+        def read(self):
+            return True, np.zeros((48, 64, 3), np.uint8)
+
+        def release(self):
+            pass
+
     monkeypatch.setattr(cv2, "VideoCapture", lambda *_: OpenCap())
     manager = SessionManager.__new__(SessionManager)
     manager.engine = SimpleNamespace(user_manager=FakeUserManager(), session_active=False,

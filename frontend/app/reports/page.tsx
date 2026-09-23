@@ -23,7 +23,17 @@ function ReportContent() {
   useEffect(() => {
     if (liveId) {
       setIsHistorical(false);
-      api.sessions.report(liveId).then(setReport).catch((e) => setError(e.message));
+      api.sessions
+        .report(liveId)
+        .then(setReport)
+        .catch(() =>
+          // The session ended since the link was made: show the saved report.
+          api.sessions.historyReport(liveId).then((r) => {
+            setIsHistorical(true);
+            setReport(r);
+          })
+        )
+        .catch((e) => setError(e.message));
     } else if (historyId) {
       setIsHistorical(true);
       api.sessions.historyReport(historyId).then(setReport).catch((e) => setError(e.message));

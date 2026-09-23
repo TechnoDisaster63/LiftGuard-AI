@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Play, Square } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLiveSession } from "@/lib/ws";
@@ -21,30 +22,48 @@ export default function LivePage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { frameUrl, telemetry, state, sendControl, toasts } = useLiveSession(sessionId);
+  const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
+  const { frameUrl, telemetry, state, sendControl, toasts, fatalError } = useLiveSession(sessionId);
 
   const handleStart = async () => {
     setStarting(true);
     setError(null);
+    setSavedSessionId(null);
     try {
       const res = await api.sessions.start({});
       setSessionId(res.session_id);
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? `Couldn't start session — is the backend running? (${e.message})`
-          : "Couldn't start session"
-      );
+      // The backend's message already says what went wrong (camera missing,
+      // busy, blocked, or a session already running) and what to check.
+      setError(`Couldn't start the session. ${e instanceof Error ? e.message : ""}`.trim());
     } finally {
       setStarting(false);
     }
   };
 
-  const handleStop = async () => {
-    if (!sessionId) return;
-    await api.sessions.stop(sessionId).catch(() => null);
+  const stopSession = useCallback(async (id: string) => {
     setSessionId(null);
+    try {
+      await api.sessions.stop(id);
+      setSavedSessionId(id);
+    } catch (e) {
+      // 404: the backend already dropped it (e.g. restarted) - nothing to save.
+      setError(`The session stopped, but it may not have been saved. ${e instanceof Error ? e.message : ""}`.trim());
+    }
+  }, []);
+
+  const handleStop = async () => {
+    if (sessionId) await stopSession(sessionId);
   };
+
+  // Camera lost / video finished / engine error: show why, and stop the
+  // session so the camera is freed and what was recorded is saved.
+  useEffect(() => {
+    if (fatalError && sessionId) {
+      setError(fatalError);
+      void stopSession(sessionId);
+    }
+  }, [fatalError, sessionId, stopSession]);
 
   // Only validated outputs are shown: the calibrated squat counter and the
   // rep-based fatigue indicator. TCN confidence, MC-dropout uncertainty and
@@ -81,8 +100,16 @@ export default function LivePage() {
         </div>
 
         {error && (
-          <div className="rounded-control border border-risk-high/30 bg-risk-high/5 px-4 py-3 text-sm text-risk-high">
+          <div role="alert" className="rounded-control border border-risk-high/30 bg-risk-high/5 px-4 py-3 text-sm text-risk-high">
             {error}
+          </div>
+        )}
+        {savedSessionId && !sessionId && (
+          <div className="rounded-control border border-border px-4 py-3 text-sm text-ink-muted">
+            Session saved.{" "}
+            <Link className="underline text-ink" href={`/reports?history=${savedSessionId}`}>
+              Open the report
+            </Link>
           </div>
         )}
 

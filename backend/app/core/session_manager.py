@@ -78,6 +78,68 @@ def live_fatigue_summary(engine) -> dict:
     }
 
 
+class CameraError(RuntimeError):
+    """A camera problem with a message meant for the person at the laptop."""
+
+
+CAMERA_HELP = (
+    "Check that the camera is connected and not in use by another app "
+    "(Zoom, Teams, the Windows Camera app, or a browser tab on the Register "
+    "page). On Windows, also check Settings > Privacy & security > Camera: "
+    "'Camera access' and 'Let desktop apps access your camera' must be on."
+)
+
+
+def camera_source(camera_id):
+    """LIFTGUARD_CAMERA_SOURCE (a video file path or stream URL) overrides the
+    numeric camera id. Used for testing with a recorded clip and for IP cameras."""
+    import os
+
+    override = os.getenv("LIFTGUARD_CAMERA_SOURCE", "").strip()
+    return override or camera_id
+
+
+def open_camera(source, warmup_seconds: float = 3.0):
+    """Open a camera or video source and make sure it actually delivers frames.
+
+    Returns (cap, first_frame). Raises CameraError with a readable message.
+    On Windows, numeric cameras try DirectShow first: the default Media
+    Foundation backend can take many seconds to open or hang on some webcams.
+    """
+    import sys
+    import time
+
+    import cv2
+
+    label = f"camera {source}" if isinstance(source, int) else f"video source {source}"
+    attempts = []
+    if isinstance(source, int) and sys.platform == "win32":
+        attempts.append(cv2.CAP_DSHOW)
+    attempts.append(None)
+
+    for backend in attempts:
+        cap = cv2.VideoCapture(source) if backend is None else cv2.VideoCapture(source, backend)
+        if not cap.isOpened():
+            cap.release()
+            continue
+        if isinstance(source, int):
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        deadline = time.monotonic() + warmup_seconds
+        while time.monotonic() < deadline:
+            ok, frame = cap.read()
+            if ok and frame is not None and frame.size:
+                return cap, frame
+            time.sleep(0.05)
+        cap.release()
+        raise CameraError(
+            f"Opened {label} but it isn't sending any video. It is probably in use by "
+            f"another app or blocked by privacy settings. {CAMERA_HELP}"
+        )
+    raise CameraError(f"Couldn't open {label}. {CAMERA_HELP}")
+
+
 class SessionManager:
     """One SessionManager instance = one live camera session."""
 
@@ -112,9 +174,23 @@ class SessionManager:
         # racing camera reads and model state.
         import threading
         self._stream_lock = threading.Lock()
+        # Guards cap.read() (WebSocket thread) against cap.release() /
+        # camera switches (stop and control requests on other threads).
+        self._cap_lock = threading.Lock()
+
+    def _camera_lock(self):
+        import threading
+
+        lock = getattr(self, "_cap_lock", None)
+        if lock is None:  # instances built with __new__ in tests
+            lock = self._cap_lock = threading.Lock()
+        return lock
 
     def acquire_stream(self) -> bool:
         return self._stream_lock.acquire(blocking=False)
+
+    def has_viewer(self) -> bool:
+        return self._stream_lock.locked()
 
     def release_stream(self) -> None:
         if self._stream_lock.locked():
@@ -126,24 +202,35 @@ class SessionManager:
         cv2.imshow loop itself, which the WebSocket route drives instead)."""
         import cv2  # lazy: see note in __init__
 
-        self.camera_id = camera_id
-        self.cap = cv2.VideoCapture(camera_id)
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Cannot open camera {camera_id}")
-
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        source = camera_source(camera_id)
+        self.camera_id = source
+        self.cap, _ = open_camera(source)
+        camera_id = source
 
         # Squat counter timing: a video file has a real fps; a webcam's
         # nominal fps is not the processing rate, so let the engine measure it.
         source_fps = None
         if isinstance(camera_id, str) and not camera_id.isdigit():
             source_fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 0) or None
+            # open_camera consumed one frame; rewind a file so no clip frame is lost.
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         self.engine.configure_live_squat(source_fps)
 
         # Same face-ID call as the desktop run(). Blocking is acceptable -
         # start() runs once, off the per-frame loop.
+        try:
+            self._identify_user(camera_id)
+        except Exception:
+            self.cap.release()
+            self.cap = None
+            raise
+        if hasattr(self.engine, "current_camera_id"):
+            self.engine.current_camera_id = camera_id
+
+        self.engine.session_active = True
+        self.active = True
+
+    def _identify_user(self, camera_id):
         if hasattr(self.engine, "user_manager"):
             # Headless: a web request has no console for input() and no
             # desktop for cv2.imshow. Enrolled users are matched; otherwise
@@ -161,19 +248,28 @@ class SessionManager:
             if not getattr(self.engine.current_user, "is_guest", True):
                 self.engine.user_manager.start_session(self.engine.current_user.user_id)
 
-        self.engine.session_active = True
-        self.active = True
-
     def stop(self):
         self.active = False
         if self.engine.session_active:
             self.engine._end_session()
-        if self.cap is not None:
-            self.cap.release()
-            self.cap = None
+        with self._camera_lock():
+            if self.cap is not None:
+                self.cap.release()
+                self.cap = None
         if self.engine.arduino_connected:
             self.engine.arduino.laser_off()
             self.engine.arduino.disconnect()
+
+    def stop_quietly(self):
+        """Release the camera without touching the engine; never raises."""
+        self.active = False
+        try:
+            with self._camera_lock():
+                if self.cap is not None:
+                    self.cap.release()
+                    self.cap = None
+        except Exception:
+            pass
 
     # ── Per-frame step (called in a loop by the WS route) ─────
     def step(self):
@@ -181,11 +277,11 @@ class SessionManager:
         pipeline, and returns (jpeg_bytes, telemetry_dict)."""
         import cv2  # lazy: see note in __init__
 
-        if not self.active or self.cap is None:
-            return None, None
-
-        ret, frame = self.cap.read()
-        if not ret:
+        with self._camera_lock():
+            if not self.active or self.cap is None:
+                return None, None
+            ret, frame = self.cap.read()
+        if not ret or frame is None:
             return None, None
 
         if self.engine.mirror_mode:
@@ -311,8 +407,11 @@ class SessionManager:
             e.reset_reps()
             return "Rep counter reset"
         elif action == "export_data":
+            import os
+
             e.export_data()
-            return "Session data exported"
+            # ExerciseTracker writes relative to the backend's working directory.
+            return f"Session data exported as CSV to {os.path.abspath('exports')}"
         elif action == "list_users":
             e.list_users()
             return "User list printed to server console"
@@ -323,12 +422,13 @@ class SessionManager:
             e.complete_calibration()
             return "Calibration complete"
         elif action == "connect_ip_camera":
-            self.cap = e.connect_ip_camera(self.cap)
-            return "IP camera connect attempted - check the video feed"
+            return self._switch_camera(e.ip_camera_url)
         elif action.startswith("switch_camera:"):
-            cam_id = int(action.split(":", 1)[1])
-            self.cap = e.switch_camera(self.cap, cam_id)
-            return f"Switched to camera {cam_id}"
+            try:
+                cam_id = int(action.split(":", 1)[1])
+            except ValueError as exc:
+                raise ValueError("Camera id must be a number") from exc
+            return self._switch_camera(cam_id)
         elif action.startswith("connect_wifi_laser:"):
             host = action.split(":", 1)[1]
             ok = e.connect_wifi_laser(host)
@@ -344,6 +444,20 @@ class SessionManager:
             return f"Processing every {e.process_every_n} frame(s) - slower"
         else:
             raise ValueError(f"Unknown control action: {action}")
+
+    def _switch_camera(self, source) -> str:
+        """Open the new camera first; keep the current one if it fails."""
+        try:
+            new_cap, _ = open_camera(source)
+        except CameraError as exc:
+            return f"Kept the current camera. {exc}"
+        with self._camera_lock():
+            old, self.cap = self.cap, new_cap
+            self.camera_id = source
+            self.engine.current_camera_id = source
+        if old is not None:
+            old.release()
+        return f"Switched to {'camera ' + str(source) if isinstance(source, int) else 'IP camera'}"
 
     def get_uncertainty_summary(self) -> dict:
         """JSON equivalent of engine.show_uncertainty_summary(), which only
