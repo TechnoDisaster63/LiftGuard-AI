@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { otherCameras, rememberCamera, startWithCamera } from "@/lib/camera";
 import { useLiveSession, type TelemetryPayload } from "@/lib/ws";
+import { unlockVoice, useVoiceCues, useVoiceSetting } from "@/lib/voice";
 import { openDeviceCamera, stopDeviceCamera, useFrameUplink } from "@/lib/deviceCamera";
 import { Alert, FLAG_CUE, Spinner } from "@/components/lg/ui";
 
@@ -111,6 +112,7 @@ function LiveInner() {
 
   const handleStart = useCallback(async () => {
     if (starting || sessionId) return;
+    unlockVoice(); // still inside the click / key press, so speech is allowed later
     setStarting(true);
     setError(null);
     setSavedSessionId(null);
@@ -131,6 +133,7 @@ function LiveInner() {
 
   const handleStartDevice = useCallback(async () => {
     if (starting || sessionId) return;
+    unlockVoice();
     setStarting(true);
     setError(null);
     setSavedSessionId(null);
@@ -139,7 +142,7 @@ function LiveInner() {
       setTrying("Asking for camera permission");
       stream = await openDeviceCamera();
       setTrying("Camera on · starting the analysis");
-      const res = await api.sessions.start({ camera_id: "browser" });
+      const res = await api.sessions.start({ camera_id: "browser", voice_enabled: false });
       setDeviceStream(stream);
       setSessionId(res.session_id);
     } catch (e) {
@@ -192,6 +195,13 @@ function LiveInner() {
 
   // ---- derived live state ----
   const st = readStatus(telemetry);
+  const { voiceOn, toggleVoice } = useVoiceSetting();
+  const manualCalNow = telemetry?.calibration_mode ?? false;
+  const voiceStatus = useMemo(
+    () => (telemetry && sessionId ? { warmingUp: st.warmingUp, manualCal: manualCalNow, lastRep: st.lastRep, fatigueStatus: st.fatigueStatus } : null),
+    [telemetry, sessionId]
+  );
+  useVoiceCues(voiceStatus, voiceOn);
   const [ledger, setLedger] = useState<{ rep: number; flagged: boolean }[]>([]);
   const [repAt, setRepAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -258,7 +268,7 @@ function LiveInner() {
         e.preventDefault();
         handleStop();
       } else if (k === "escape") setMenuOpen((m) => !m);
-      else if (k === "v") sendControl("toggle_voice");
+      else if (k === "v") toggleVoice();
       else if (k === "m") sendControl("toggle_mirror");
       else if (k === "c") sendControl(manualCal ? "complete_calibration" : "start_calibration");
       else if (k === "r") sendControl("reset_reps");
@@ -266,7 +276,7 @@ function LiveInner() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal, switchCamera, deviceMode]);
+  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal, switchCamera, deviceMode, toggleVoice]);
 
   // ---------------- READY (no session) ----------------
   if (!sessionId && !starting) {
@@ -475,7 +485,7 @@ function LiveInner() {
         <div className="ml-auto flex gap-3.5 lg-m" style={{ color: "rgba(244,243,238,.75)" }}>
           {[
             ["Space", "Stop"],
-            ["V", telemetry?.voice_enabled ? "Voice on" : "Voice off"],
+            ["V", voiceOn ? "Voice on" : "Voice off"],
             ["M", "Mirror"],
             ["C", manualCal ? "Finish cal" : "Calibrate"],
             ["R", "Reset"],
@@ -489,7 +499,7 @@ function LiveInner() {
       </div>
 
       {menuOpen && sessionId && !stopping && (
-        <LiveMenu telemetry={telemetry} deviceMode={deviceMode} onAction={sendControl} onStop={handleStop} onClose={() => setMenuOpen(false)} />
+        <LiveMenu telemetry={telemetry} deviceMode={deviceMode} voiceOn={voiceOn} onAction={(a) => (a === "toggle_voice" ? toggleVoice() : sendControl(a))} onStop={handleStop} onClose={() => setMenuOpen(false)} />
       )}
 
       <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2" style={{ bottom: 110 }} aria-live="polite">
@@ -503,12 +513,12 @@ function LiveInner() {
   );
 }
 
-function LiveMenu({ telemetry, deviceMode, onAction, onStop, onClose }: { telemetry: TelemetryPayload | null; deviceMode: boolean; onAction: (a: string) => void; onStop: () => void; onClose: () => void }) {
+function LiveMenu({ telemetry, deviceMode, voiceOn, onAction, onStop, onClose }: { telemetry: TelemetryPayload | null; deviceMode: boolean; voiceOn: boolean; onAction: (a: string) => void; onStop: () => void; onClose: () => void }) {
   const laser = telemetry?.arduino_connected ?? false;
   const cam = Number(telemetry?.camera_id ?? 0);
   const every = telemetry?.process_every_n ?? 1;
   const rows: { label: string; value: string; action: string; key?: string; muted?: boolean }[] = [
-    { label: "Voice cues", value: telemetry?.voice_enabled ? "On" : "Off", action: "toggle_voice", key: "V" },
+    { label: "Voice cues (this device)", value: voiceOn ? "On" : "Off", action: "toggle_voice", key: "V" },
     { label: "Mirror camera", value: telemetry?.mirror_mode ? "On" : "Off", action: "toggle_mirror", key: "M" },
     { label: "Recalibrate depth", value: telemetry?.calibration_mode ? "Finish" : "Start", action: telemetry?.calibration_mode ? "complete_calibration" : "start_calibration", key: "C" },
     { label: "Reset rep count", value: "Reset", action: "reset_reps", key: "R" },
