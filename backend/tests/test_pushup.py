@@ -174,13 +174,13 @@ def test_feed_runs_pushup_mode_and_switches_cleanly():
     assert feed.update(None)["movement"] == "squat"
     assert feed.set_mode("squat") is False
     with pytest.raises(ValueError):
-        feed.set_mode("jumping_jacks")
+        feed.set_mode("situps")
 
 
 def test_counter_registry_and_recognizer_labels():
     assert counter_class("pushup") is LivePushupCounter
     assert RECOGNIZER_LABELS["pushups"] == "pushup" and RECOGNIZER_LABELS["squats"] == "squat"
-    assert RECOGNIZER_LABELS["jumping_jacks"] is None  # no mode yet: the recognizer cannot switch to it
+    assert RECOGNIZER_LABELS["situps"] is None  # no mode yet: the recognizer cannot switch to it
 
 
 def test_recognizer_gate_needs_a_confident_steady_label_and_no_rep_in_progress():
@@ -192,8 +192,8 @@ def test_recognizer_gate_needs_a_confident_steady_label_and_no_rep_in_progress()
     assert gate.current == "pushup"
     # Low confidence or unsupported labels reset the candidate and change nothing.
     assert gate.observe("squats", 0.5, 4.0) is None
-    assert gate.observe("jumping_jacks", 0.99, 5.0) is None
+    assert gate.observe("situps", 0.99, 5.0) is None
     assert gate.observe("squats", 0.9, 6.0) is None
-    assert gate.observe("jumping_jacks", 0.99, 7.0) is None           # breaks the squat run
+    assert gate.observe("situps", 0.99, 7.0) is None           # breaks the squat run
     assert gate.observe("squats", 0.9, 8.5) is None
     assert gate.current == "pushup"
