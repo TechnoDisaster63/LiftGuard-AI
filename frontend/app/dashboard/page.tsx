@@ -7,6 +7,8 @@ import { useBackendOnline } from "@/components/layout/TopNav";
 import { useSessionRows, FATIGUE_LABEL } from "@/lib/history";
 import { Split, fmtDate } from "@/components/lg/ui";
 import { getCameraPin } from "@/lib/camera";
+import { MovementLine } from "@/components/lg/MovementPicker";
+import { useMovementMode } from "@/lib/movement";
 
 export default function DashboardPage() {
   const online = useBackendOnline();
@@ -16,6 +18,7 @@ export default function DashboardPage() {
   const [camPin, setCamPin] = useState<number | null>(null);
   const { rows } = useSessionRows({ limit: 1 });
   const last = rows?.[0] ?? null;
+  const movement = useMovementMode();
 
   useEffect(() => {
     api.settings.get().then(setDefaults).catch(() => {});
@@ -25,7 +28,7 @@ export default function DashboardPage() {
   }, []);
 
   const pre: [string, string, string][] = [
-    ["Movement mode", "Squat", "var(--lg-ink)"],
+    ["Movement mode", movement.current.label, "var(--lg-ink)"],
     ["Backend", online === null ? "Checking" : online ? "Online" : "Offline", online ? "var(--lg-mint)" : online === false ? "var(--lg-amber)" : "var(--lg-faint)"],
     ["Camera", camPin !== null ? `Fixed to camera ${camPin}` : "Finds it automatically at start", camPin !== null ? "var(--lg-amber)" : "var(--lg-dim)"],
     ["Voice cues", defaults ? (defaults.voice_enabled ? "On" : "Off") : "—", defaults?.voice_enabled ? "var(--lg-mint)" : "var(--lg-faint)"],
@@ -42,7 +45,7 @@ export default function DashboardPage() {
           </Link>
         )}
         <div style={{ fontSize: 26, fontWeight: 600, maxWidth: 560, lineHeight: 1.2 }}>Real-time movement analysis for injury prevention.</div>
-        <div className="lg-m lg-dim mt-2.5">Movement mode: squat · watches depth, trunk lean, range of motion</div>
+        <MovementLine />
         <div className="lg-d mt-3" style={{ fontSize: "clamp(120px, 17vw, 240px)", color: online === false ? "var(--lg-idle)" : undefined }}>
           {online === false ? "Offline" : "Ready"}
         </div>

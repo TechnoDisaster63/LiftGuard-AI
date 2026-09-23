@@ -55,17 +55,29 @@ def live_exercise_summary(engine) -> dict:
     def avg(key):
         return round(sum(r[key] for r in reps) / len(reps), 2) if reps else None
 
-    return {
-        "exercise": "Squat" if reps else "No squat reps counted",
+    from ..video_analysis.movements import MOVEMENT_MODES
+
+    feed = getattr(engine, "live_squat", None)
+    mode = getattr(feed, "mode", "squat")
+    info = MOVEMENT_MODES.get(mode, MOVEMENT_MODES["squat"])
+    summary = {
+        "exercise": info["label"] if reps else f"No {info['noun']} reps counted",
+        "movement_mode": mode,
         "total_reps": len(reps),
         "reps_with_form_flags": sum(bool(r.get("form_flags")) for r in reps),
         "avg_rep_seconds": avg("duration_seconds"),
-        "avg_deepest_knee_angle_deg": avg("min_knee_angle"),
+    }
+    if mode == "pushup":
+        summary["avg_deepest_elbow_angle_deg"] = avg("min_elbow_angle")
+    else:
+        summary["avg_deepest_knee_angle_deg"] = avg("min_knee_angle")
+    summary.update({
         "avg_range_of_motion_deg": avg("rom_degrees"),
         "rejected_candidates": sum(int(v or 0) for v in gates.values()),
         "calibration_mode": status.get("calibration_mode"),
-        "counter": "calibrated_squat_counter",
-    }
+        "counter": info["source"],
+    })
+    return summary
 
 
 def live_fatigue_summary(engine) -> dict:
@@ -153,7 +165,7 @@ class SessionManager:
     validated_claims_only = True
 
     def __init__(self, voice_enabled=True, arduino_enabled=True,
-                 model_complexity=0, process_every_n=1, use_temporal=True):
+                 model_complexity=0, process_every_n=1, use_temporal=True, movement_mode="squat"):
         # Imported here (not at module load) so the FastAPI app and its
         # test suite can start without the heavy CV/ML stack (opencv,
         # mediapipe, torch) installed. See requirements-dev.txt.
@@ -172,6 +184,7 @@ class SessionManager:
         # unset, this attribute defaults to "desktop", so run_standalone.py
         # is completely unaffected by this.
         self.engine.render_mode = "web"
+        self.movement_mode = movement_mode
         self.cap = None
         self.active = False
         self.camera_id = 0
@@ -227,7 +240,7 @@ class SessionManager:
             source_fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 0) or None
             # open_camera consumed one frame; rewind a file so no clip frame is lost.
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        self.engine.configure_live_squat(source_fps)
+        self.engine.configure_live_squat(source_fps, mode=getattr(self, "movement_mode", "squat"))
 
         # Same face-ID call as the desktop run(). Blocking is acceptable -
         # start() runs once, off the per-frame loop.

@@ -5,6 +5,7 @@ import { API_BASE, api, SessionDefaults } from "@/lib/api";
 import { Alert, Segmented, Spinner, Switch } from "@/components/lg/ui";
 import { useBackendOnline } from "@/components/layout/TopNav";
 import { CAMERA_CANDIDATES, getCameraPin, getLastCamera, setCameraPin } from "@/lib/camera";
+import { MovementPicker } from "@/components/lg/MovementPicker";
 
 export default function SettingsPage() {
   const online = useBackendOnline();
@@ -37,7 +38,7 @@ export default function SettingsPage() {
 
   const rows: [string, string, React.ReactNode][] = defaults
     ? [
-        ["Movement mode", "Squat is the mode available today. More movements plug in here.", <Segmented key="m" label="Movement mode" options={["Squat"]} value={0} onChange={() => {}} />],
+        ["Movement mode", "Squat is ready today. Push-up is built and becomes selectable once it has been checked on a recorded side-view clip.", <MovementPicker key="m" />],
         ["Camera", "Found automatically at start: LiftGuard uses the first camera that sends video.", <CameraSetting key="c" />],
         ["Voice cues", "Spoken feedback during the session.", <Switch key="v" label="Voice cues" checked={defaults.voice_enabled} onChange={(v) => patch({ voice_enabled: v })} />],
         ["Laser pointer", "Arduino pan-tilt laser, if one is plugged in.", <Switch key="l" label="Laser pointer" checked={defaults.arduino_enabled} onChange={(v) => patch({ arduino_enabled: v })} />],

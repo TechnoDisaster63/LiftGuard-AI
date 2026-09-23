@@ -12,7 +12,7 @@ A movement mode owns three things: the joint metrics it measures, a rep definiti
 ## Rollout
 
 1. **Push-up (this step).** Engine, gates, flags and tests on synthetic skeletons. Next: record one side-view push-up clip (Techno, not trainer footage for anything public), turn its landmarks into a fixture like `front_view_squats.json.gz`, check counts and flags against it, then tune thresholds.
-2. **Mode selection in the app.** Add `movement_mode` to session defaults, pass it to `LiveSquatFeed(mode=...)` at session start, add the Push-up button on Settings and the Ready page. Only modes that passed step 1 on a real clip become selectable.
+2. **Mode selection in the app (done).** `movement_mode` is a session default (squat by default). Session start passes it to the live feed, and the report summary, fatigue indicator and saved contributions follow it. Settings and the Live Ready screen have a mode picker, and the top bar shows the current mode. `GET /api/settings/movement-modes` lists every mode with `validated` and `selectable`. A mode can be picked only once `validated` is True in `movements.py`. Push-up is False until step 1 passes, so the app lists it as "Coming". For development, `LIFTGUARD_PREVIEW_MODES=pushup` on the backend unlocks it.
 3. **Lunge**, then **jumping jacks**: same steps. Each gets a recorded-clip fixture before it is selectable.
 4. **Auto-detection** (below), turned on after at least two modes pass on real clips.
 

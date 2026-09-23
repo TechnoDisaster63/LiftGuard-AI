@@ -93,6 +93,19 @@ export interface SessionDefaults {
   model_complexity: number;
   process_every_n: number;
   use_temporal: boolean;
+  movement_mode: string;
+}
+
+/** One movement mode (backend video_analysis/movements.py). */
+export interface MovementMode {
+  id: string;
+  label: string;
+  watches: string;
+  view: string;
+  validated: boolean;
+  /** False until the mode has passed a recorded-clip check. */
+  selectable: boolean;
+  note: string | null;
 }
 
 export interface UserRegisterResponse {
@@ -225,6 +238,7 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(patch),
       }),
+    movementModes: () => request<{ modes: MovementMode[] }>("/api/settings/movement-modes"),
   },
 };
 

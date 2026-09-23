@@ -13,6 +13,7 @@ import { ContributeCard } from "@/components/contrib/ContributeCard";
 import { SetRatingCard } from "@/components/contrib/SetRatingCard";
 import type { ContributionSet } from "@/lib/api";
 import { contribStartFields } from "@/lib/contrib";
+import { MovementLine, MovementPicker } from "@/components/lg/MovementPicker";
 
 type StageState = "idle" | "counting" | "clean" | "flagged" | "fatigue";
 type LastRep = { rep?: number; form_flags?: string[] } | null;
@@ -328,7 +329,10 @@ function LiveInner() {
       <div className="lg-ready lg-fade grid gap-6" style={{ gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr)", minHeight: "calc(100vh - 150px)" }}>
         <div className="lg-ready-hero relative rounded-[18px] overflow-hidden flex flex-col justify-end p-9" style={{ background: "radial-gradient(120% 90% at 20% 10%, #1c1c20, #0b0b0c)" }}>
           <div style={{ fontSize: 26, fontWeight: 600, maxWidth: 560, lineHeight: 1.2 }}>Real-time movement analysis for injury prevention.</div>
-          <div className="lg-m lg-dim mt-2.5">Movement mode: squat · watches depth, trunk lean, range of motion</div>
+          <MovementLine />
+          <div className="mt-3">
+            <MovementPicker align="start" />
+          </div>
           <div className="lg-d mt-3" style={{ fontSize: "clamp(120px, 17vw, 240px)" }}>
             Ready
           </div>

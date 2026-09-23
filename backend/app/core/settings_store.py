@@ -15,6 +15,7 @@ _FIELDS = (
     "model_complexity",
     "process_every_n",
     "use_temporal",
+    "movement_mode",
 )
 
 
@@ -26,6 +27,7 @@ def _environment_defaults() -> dict:
         "model_complexity": env_settings.MODEL_COMPLEXITY,
         "process_every_n": env_settings.PROCESS_EVERY_N,
         "use_temporal": env_settings.USE_TEMPORAL,
+        "movement_mode": "squat",
     }
 
 
@@ -55,7 +57,13 @@ class SessionDefaultsStore:
             return defaults
         if not isinstance(stored, dict):
             return defaults
-        return {**defaults, **{key: stored[key] for key in _FIELDS if key in stored}}
+        data = {**defaults, **{key: stored[key] for key in _FIELDS if key in stored}}
+        from ..video_analysis.movements import DEFAULT_MODE, is_selectable
+
+        if not is_selectable(data.get("movement_mode", "")):
+            # A mode that is unknown or no longer unlocked falls back to squat.
+            data["movement_mode"] = DEFAULT_MODE
+        return data
 
     def get(self) -> dict:
         with self._lock:

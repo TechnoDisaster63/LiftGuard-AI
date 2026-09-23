@@ -277,14 +277,21 @@ def _fatigue(reps: Sequence[dict], baseline_reps: int) -> dict:
     mean = lambda xs: sum(xs) / len(xs)
     b_duration = mean([r["duration_seconds"] for r in base])
     b_rom = mean([r["rom_degrees"] for r in base])
-    b_trunk = mean([r["max_trunk_lean"] for r in base])
     r_duration = mean([r["duration_seconds"] for r in recent])
     r_rom = mean([r["rom_degrees"] for r in recent])
-    r_trunk = mean([r["max_trunk_lean"] for r in recent])
     duration_drift = max(0.0, (r_duration - b_duration) / max(b_duration, 0.01))
     rom_loss = max(0.0, (b_rom - r_rom) / max(b_rom, 1.0))
-    trunk_drift = max(0.0, (r_trunk - b_trunk) / 20.0)
-    score = round(min(100.0, 100 * (0.4 * duration_drift + 0.35 * rom_loss + 0.25 * trunk_drift)), 1)
+    # Movements without a trunk-lean measurement (e.g. push-ups) score on
+    # rep time and range only, re-weighted to the same 0-100 scale.
+    has_trunk = all("max_trunk_lean" in r for r in reps)
+    if has_trunk:
+        b_trunk = mean([r["max_trunk_lean"] for r in base])
+        r_trunk = mean([r["max_trunk_lean"] for r in recent])
+        trunk_drift = max(0.0, (r_trunk - b_trunk) / 20.0)
+        raw = 0.4 * duration_drift + 0.35 * rom_loss + 0.25 * trunk_drift
+    else:
+        raw = (0.4 * duration_drift + 0.35 * rom_loss) / 0.75
+    score = round(min(100.0, 100 * raw), 1)
     status = "ELEVATED" if score >= 35 else "WATCH" if score >= 15 else "STABLE"
     return {
         "status": status,
@@ -292,7 +299,7 @@ def _fatigue(reps: Sequence[dict], baseline_reps: int) -> dict:
         "signals": {
             "rep_duration_drift_pct": round(duration_drift * 100, 1),
             "range_of_motion_loss_pct": round(rom_loss * 100, 1),
-            "trunk_lean_drift_degrees": round(max(0.0, r_trunk - b_trunk), 1),
+            "trunk_lean_drift_degrees": round(max(0.0, r_trunk - b_trunk), 1) if has_trunk else None,
         },
     }
 
