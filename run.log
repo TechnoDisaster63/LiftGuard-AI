@@ -1,0 +1,68 @@
++ pkill -f 'next dev'
++ cd /tmp/wt-cam/frontend
++ rm -f node_modules
++ cp -a /tmp/wt-design/frontend/node_modules ./node_modules
++ nohup setsid npx next dev -p 3001
+++ seq 1 40
++ for i in $(seq 1 40)
+++ curl -s -o /dev/null -w '%{http_code}' localhost:3001/
++ c=000
++ '[' 000 '!=' 000 ']'
++ sleep 3
++ for i in $(seq 1 40)
+++ curl -s -o /dev/null -w '%{http_code}' localhost:3001/
++ c=307
++ '[' 307 '!=' 000 ']'
++ break
++ echo next=307
+next=307
++ curl -s localhost:8000/api/health
+{"status":"ok","app":"LiftGuard AI"}+ . /tmp/lgvenv/bin/activate
+++ '[' -z '' ']'
+++ '[' -n x ']'
+++ SCRIPT_PATH=/tmp/lgvenv/bin/activate
+++ '[' /tmp/lgvenv/bin/activate = ./lg_run4.sh ']'
+++ deactivate nondestructive
+++ unset -f pydoc
+++ '[' -z '' ']'
+++ '[' -z '' ']'
+++ hash -r
+++ '[' -z '' ']'
+++ unset VIRTUAL_ENV
+++ unset VIRTUAL_ENV_PROMPT
+++ '[' '!' nondestructive = nondestructive ']'
+++ VIRTUAL_ENV=/tmp/lgvenv
+++ '[' linux-gnu = cygwin ']'
+++ '[' linux-gnu = msys ']'
+++ export VIRTUAL_ENV
+++ '[' -z '' ']'
+++ unset SCRIPT_PATH
+++ _OLD_VIRTUAL_PATH=/vscode/bin/linux-x64/7debcd0e2acdea1c52de81bf9ee1620444407dda/bin/remote-cli:/home/codespace/.local/bin:/usr/local/rubies/current/bin:/home/codespace/.dotnet:/home/codespace/nvm/current/bin:/home/codespace/.php/current/bin:/home/codespace/.python/current/bin:/home/codespace/java/current/bin:/home/codespace/.ruby/current/bin:/home/codespace/.local/bin:/usr/local/python/current/bin:/usr/local/py-utils/bin:/usr/local/jupyter:/usr/local/oryx:/usr/local/go/bin:/go/bin:/usr/local/sdkman/bin:/usr/local/sdkman/candidates/java/current/bin:/usr/local/sdkman/candidates/gradle/current/bin:/usr/local/sdkman/candidates/maven/current/bin:/usr/local/sdkman/candidates/ant/current/bin:/usr/local/share/rbenv/shims:/usr/local/share/rbenv/bin:/usr/local/rubies/current/bin:/usr/local/php/current/bin:/opt/conda/bin:/usr/local/share/nvm/versions/node/v24.21.0/bin:/usr/local/hugo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/share/dotnet:/home/codespace/.dotnet/tools
+++ PATH=/tmp/lgvenv/bin:/vscode/bin/linux-x64/7debcd0e2acdea1c52de81bf9ee1620444407dda/bin/remote-cli:/home/codespace/.local/bin:/usr/local/rubies/current/bin:/home/codespace/.dotnet:/home/codespace/nvm/current/bin:/home/codespace/.php/current/bin:/home/codespace/.python/current/bin:/home/codespace/java/current/bin:/home/codespace/.ruby/current/bin:/home/codespace/.local/bin:/usr/local/python/current/bin:/usr/local/py-utils/bin:/usr/local/jupyter:/usr/local/oryx:/usr/local/go/bin:/go/bin:/usr/local/sdkman/bin:/usr/local/sdkman/candidates/java/current/bin:/usr/local/sdkman/candidates/gradle/current/bin:/usr/local/sdkman/candidates/maven/current/bin:/usr/local/sdkman/candidates/ant/current/bin:/usr/local/share/rbenv/shims:/usr/local/share/rbenv/bin:/usr/local/rubies/current/bin:/usr/local/php/current/bin:/opt/conda/bin:/usr/local/share/nvm/versions/node/v24.21.0/bin:/usr/local/hugo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/share/dotnet:/home/codespace/.dotnet/tools
+++ export PATH
+++ '[' x '!=' x ']'
++++ basename /tmp/lgvenv
+++ VIRTUAL_ENV_PROMPT=lgvenv
+++ export VIRTUAL_ENV_PROMPT
+++ '[' -z '' ']'
+++ '[' -z '' ']'
+++ _OLD_VIRTUAL_PS1=
+++ PS1='(lgvenv) '
+++ export PS1
+++ alias pydoc
+++ true
+++ hash -r
++ python /tmp/lg_click2.py
+  [/live start] HTTP 400 POST http://localhost:8000/api/sessions/start
+  [/live start] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  [/live start] HTTP 400 POST http://localhost:8000/api/sessions/start
+  [/live start] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  [/live pinned 3] HTTP 400 POST http://localhost:8000/api/sessions/start
+  [/live pinned 3] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  hardware buttons: []
++ echo CLICK=0
+CLICK=0
++ tail -60 /tmp/lglog2/be.log
++ rm -rf /tmp/logrepo2
++ mkdir /tmp/logrepo2
++ cp /tmp/lglog2/be.log /tmp/lglog2/be.tail /tmp/lglog2/click.log /tmp/lglog2/lint.log /tmp/lglog2/next.log /tmp/lglog2/run.log /tmp/lglog2/tsc.log /tmp/logrepo2/

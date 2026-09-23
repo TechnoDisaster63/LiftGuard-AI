@@ -1,0 +1,60 @@
+INFO:     127.0.0.1:49664 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43280 - "GET /api/health HTTP/1.1" 200 OK
+[ERROR:3@205.355] global cap.cpp:164 open VIDEOIO(CV_IMAGES): raised OpenCV exception:
+
+OpenCV(4.8.0) /io/opencv/modules/videoio/src/cap_images.cpp:253: error: (-5:Bad argument) CAP_IMAGES: can't find starting number (in the name of file): /nonexistent-cam in function 'icvExtractPattern'
+
+
+
+============================================================
+🚀 INITIALIZING LIFTGUARD AI V2
+============================================================
+
+⚡ complexity=0, skip=1
+🧠 Temporal: ON
+
+📦 Loading components...
+🔀 Hybrid Risk Classifier initialized
+   Temporal mode: DISABLED
+   Fusion weight: 70% TCN, 30% Frame
+   ⚠️ Frame-level classifier not available
+
+✅ Hybrid classifier ready!
+   ✅ Hybrid Risk Classifier (TCN + Frame)
+⚡ Fatigue Detection Engine initialized
+   ✅ Fatigue Engine
+
+📊 Training IRI models...
+   ✅ Acute Model ROC-AUC:       1.000 (95% CI: 1.000-1.000)
+   ✅ Acute Calibration ECE:      0.0014
+   ✅ Cumulative Model ROC-AUC:   1.000 (95% CI: 1.000-1.000)
+   ✅ Cumulative Calibration ECE: 0.0014
+🏥 Injury Risk Index V2 initialized
+   ⚕️ DISCLAIMER: IRI is not a medical diagnosis
+   ✅ Injury Risk Index V2
+🏋️ Exercise Tracker initialized
+   ✅ Exercise Tracker
+🎲 Uncertainty Manager initialized
+   ✅ Uncertainty Manager
+   ℹ️  No face data in DB yet
+   📁 DB: liftguard_users.db (0 users)
+   ✅ User Manager
+   ✅ Form Corrector
+⚠️  Voice failed: libespeak.so.1: cannot open shared object file: No such file or directory
+
+🔌 Attempting Arduino connection...
+Arduino not found!
+   ⚠️  Arduino not found
+
+📷 MediaPipe (complexity=0)
+
+============================================================
+✅ LIFTGUARD AI V2 READY
+============================================================
+
+INFO:     127.0.0.1:43280 - "POST /api/sessions/start HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:44212 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44212 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44212 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44212 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51686 - "GET /api/sessions HTTP/1.1" 200 OK
