@@ -216,22 +216,26 @@ def load_landmark_fixture(name):
         for alias in ("shoulder", "hip", "knee", "ankle"):
             points[alias] = points[f"left_{alias}"]
         frames.append(_metrics(points, AnalysisConfig().min_visibility))
-    return data["fps"], frames
+    return data["fps"], frames, data.get("aspect", 1.0)
 
 
 def count_fixture(name, **overrides):
-    fps, frames = load_landmark_fixture(name)
+    fps, frames, aspect = load_landmark_fixture(name)
     config = AnalysisConfig(**overrides)
     thresholds = calibrate_thresholds([m["knee_angle"] for m in frames if m], config)
     log = {}
-    return count_reps(frames, fps, config, thresholds, log), log
+    return count_reps(frames, fps, config, thresholds, log, aspect), log
 
 
 def test_a_position_hold_is_not_a_squat():
     # Regression: video 4 at 72.1-74.9 s counted 1 squat. The measured knee was the lifted leg.
     reps, log = count_fixture("a_position_hold.json.gz")
     assert reps == []
-    assert log["rejected_other_knee"] == 1
+    # A camera cut inside the candidate makes the ankles "jump", so the feet check fires first.
+    assert log["rejected_feet_moved"] == 1
+    # Without the feet check, the straight standing leg still rejects it.
+    reps, log = count_fixture("a_position_hold.json.gz", max_ankle_shift_fraction=99.0)
+    assert reps == [] and log["rejected_other_knee"] == 1
     ungated, _ = count_fixture("a_position_hold.json.gz", leg_gates=False)
     assert len(ungated) == 1  # the fixture reproduces the original false rep
 
@@ -239,7 +243,8 @@ def test_a_position_hold_is_not_a_squat():
 def test_front_view_squats_still_count_15():
     reps, log = count_fixture("front_view_squats.json.gz")
     assert len(reps) == 15
-    assert log["rejected_hip_drop"] == 0 and log["rejected_other_knee"] == 0
+    assert log["rejected_hip_drop"] == 0 and log["rejected_other_knee"] == 0 and log["rejected_feet_moved"] == 0
+    assert all(r["ankle_shift_ratio"] < 0.1 for r in reps)
     assert all(r["hip_drop_ratio"] >= AnalysisConfig().min_hip_drop_fraction for r in reps)
     assert 15.0 <= reps[0]["start_seconds"] and reps[-1]["end_seconds"] <= 45.0
 
@@ -287,3 +292,28 @@ def test_real_squat_passes_both_leg_gates():
     reps = count_reps(leg_frames(knee, hip, other), 25, config, thresholds)
     assert len(reps) == 4
     assert all(r["hip_drop_ratio"] > 0.15 and r["other_min_knee_angle"] <= 100 for r in reps)
+
+
+def test_broad_jumps_are_not_squats():
+    # Regression: broad-jump clip counted 2 reps (10.0-13.9 s, 14.1-19.4 s): the dip and
+    # landing bend both knees and drop the hips, but the feet travel.
+    reps, log = count_fixture("broad_jumps.json.gz")
+    assert reps == []
+    assert log["rejected_feet_moved"] == 2
+    ungated, _ = count_fixture("broad_jumps.json.gz", max_ankle_shift_fraction=99.0)
+    assert len(ungated) == 2  # the fixture reproduces the original false reps
+
+
+def test_feet_moving_mid_rep_is_rejected():
+    knee, hip, other = squat_like()
+    frames = leg_frames(knee, hip, other)
+    for i, frame in enumerate(frames):
+        frame["ankle_xy"] = (0.5 + (0.2 if knee[i] < 150 else 0.0), 0.85)
+    config = AnalysisConfig()
+    thresholds = calibrate_thresholds(knee, config)
+    log = {}
+    assert count_reps(frames, 25, config, thresholds, log, aspect=16 / 9) == []
+    assert log["rejected_feet_moved"] == 4
+    for frame in frames:
+        frame["ankle_xy"] = (0.5, 0.85)
+    assert len(count_reps(frames, 25, config, thresholds, aspect=16 / 9)) == 4

@@ -30,14 +30,22 @@ Each video now sets its own thresholds from its knee-angle distribution (`calibr
 
 This is calibration to the lifter, not loosening to force a count. Pose coverage under 50% still refuses to produce a report. `AnalysisConfig(calibrate=False)` restores the fixed rule; the golden fixture gives the same summary either way.
 
-### Leg gates: both knees bent and hips lowered
+### Leg gates: feet planted, hips lowered, both knees bent
 
-Knee angle on one leg cannot tell a squat from lifting that leg. A held sprint "A-position" (thigh raised, standing on the other leg) counted as a squat rep because the measured knee was the lifted one. After a candidate rep passes the range and duration checks, two more checks apply (`_leg_gate`):
+Knee angle on one leg cannot tell a squat from lifting that leg (a held sprint "A-position" counted as a rep), and a deep dip before or after a jump looks like a squat (broad jumps counted 2 reps). After a candidate rep passes the range and duration checks, `_leg_gate` applies three checks. Leg length below means standing hip-to-ankle height (90th percentile over the session).
 
-- **Hip drop:** the hips must drop by at least 15% of the standing leg length (hip-to-ankle height, 90th percentile over the session) between the preceding standing phase and the bottom.
-- **Other knee:** when the other leg's hip, knee, and ankle are visible, its deepest knee angle in the rep must be within 20 deg of the bottom threshold. If the other leg is hidden (common in a true side view), only the hip-drop check applies.
+- **Feet planted:** each visible ankle must stay within 25% of leg length of its spot just before the rep (median of the previous 0.3 s). The x distance is scaled by the frame's width/height so both axes use the same units. On the dev clips, real squats moved the ankles 1-2% of leg length and broad jumps moved them 57-79%.
+- **Hip drop:** the hips must drop by at least 15% of leg length between the preceding standing phase and the bottom.
+- **Other knee:** when the other leg's hip, knee, and ankle are visible, its deepest knee angle in the rep must be within 20 deg of the bottom threshold. If the other leg is hidden (common in a true side view), this check is skipped.
 
-Rejected candidates are counted in `report.json` under `rep_gates`. Each counted rep records `hip_drop_ratio` and `other_min_knee_angle`. Known limits: a camera cut or zoom can fake a hip drop, and jumps with a deep dip (broad jumps) pass both checks. A "feet stay planted" check is the likely next gate.
+`report.json` lists rejected candidates by reason under `rep_gates` and writes the limits below under `known_limits`. Each counted rep records `ankle_shift_ratio`, `hip_drop_ratio`, and `other_min_knee_angle`.
+
+**Known limits**
+
+- A camera cut or zoom moves every landmark at once. It can fake a hip drop. The feet check usually rejects a rep that spans a cut (the A-position regression is rejected this way), but it can also reject a real rep that spans one. Recordings should be one continuous shot.
+- A squat-like dip done in place, with the feet not moving (for example a vertical jump landing on the same spot), can still pass.
+- Angles are 2D image-plane angles, not 3D joint angles.
+- Thresholds were checked on third-party dev clips and synthetic tests, not tuned to a target count. Side-view clips from the user are still needed.
 
 ## Explicitly out of scope for this challenge demo
 
