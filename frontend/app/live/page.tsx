@@ -9,6 +9,8 @@ import { useLiveSession, type TelemetryPayload } from "@/lib/ws";
 import { unlockVoice, useVoiceCues, useVoiceSetting } from "@/lib/voice";
 import { countVideoInputs, defaultFacing, flipDeviceCamera, openDeviceCamera, rememberFacing, stopDeviceCamera, streamFacing, useFrameUplink, type Facing } from "@/lib/deviceCamera";
 import { Alert, FLAG_CUE, Spinner } from "@/components/lg/ui";
+import { ContributeCard } from "@/components/contrib/ContributeCard";
+import { contribStartFields } from "@/lib/contrib";
 
 type StageState = "idle" | "counting" | "clean" | "flagged" | "fatigue";
 type LastRep = { rep?: number; form_flags?: string[] } | null;
@@ -64,6 +66,9 @@ function LiveInner() {
   const [error, setError] = useState<string | null>(null);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // "Help train LiftGuard": the backend says at start whether this
+  // session's body points are being saved; the chip shows exactly that.
+  const [contributingNow, setContributingNow] = useState(false);
   const { frameUrl, telemetry, state, sendControl, sendFrame, requestControl, toasts, fatalError } = useLiveSession(sessionId);
   // Set while a session analyses this device's camera (streamed from the
   // browser) instead of a camera on the backend machine.
@@ -150,6 +155,7 @@ function LiveInner() {
       const res = await startWithCamera((_index, attempt, total) =>
         setTrying(attempt === 1 ? "Looking for your camera" : `Looking for your camera · try ${attempt} of ${total}`)
       );
+      setContributingNow(res.contributing);
       setSessionId(res.sessionId);
     } catch (e) {
       // The backend's message already says what went wrong and what to check.
@@ -173,8 +179,9 @@ function LiveInner() {
       stream = await openDeviceCamera({ facing });
       setDeviceFacing(streamFacing(stream) ?? facing);
       setTrying("Camera on · starting the analysis");
-      const res = await api.sessions.start({ camera_id: "browser", voice_enabled: false });
+      const res = await api.sessions.start({ camera_id: "browser", voice_enabled: false, ...contribStartFields(streamFacing(stream) ?? facing) });
       setDeviceStream(stream);
+      setContributingNow(!!res.contributing);
       setSessionId(res.session_id);
     } catch (e) {
       stopDeviceCamera(stream);
@@ -333,6 +340,7 @@ function LiveInner() {
         </div>
         <div className="flex flex-col gap-4">
           {error && <Alert>{error}</Alert>}
+          <ContributeCard />
           {savedSessionId && (
             <div className="lg-card lg-fade">
               <div className="lg-m" style={{ color: "var(--lg-mint)" }}>
@@ -424,6 +432,11 @@ function LiveInner() {
         <span className="lg-chip lg-m lg-hide-sm" style={glass}>
           Movement analysis · Squat mode
         </span>
+        {contributingNow && (
+          <span className="lg-chip lg-m" style={{ ...glass, color: "var(--lg-mint)" }} title="Help train LiftGuard is on: body points only, never video">
+            Saving body points
+          </span>
+        )}
         <button className="lg-chip lg-m" style={glass} onClick={() => setMenuOpen((m) => !m)} disabled={stopping}>
           Menu <span className="lg-keyhint" style={{ opacity: 0.6 }}>Esc</span>
         </button>

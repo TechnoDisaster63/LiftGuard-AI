@@ -203,3 +203,17 @@ body { font-family: var(--font-geist), system-ui, sans-serif; }
   .lg-stage-toasts { bottom: auto !important; top: 64vh; width: 90vw; }
   .lg-tile { width: 22px; height: 30px; }
 }
+
+/* ── Opt-in training data ── */
+.lg-sheet-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.7); display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+@media (min-width: 720px) { .lg-sheet-backdrop { align-items: center; } }
+.lg-sheet { width: 100%; max-width: 560px; max-height: calc(100dvh - 32px); overflow-y: auto; background: var(--lg-p); border: 1px solid var(--lg-line); border-radius: 18px; padding: 26px 26px 0; }
+.lg-sheet-actions { position: sticky; bottom: 0; background: var(--lg-p); padding: 16px 0 22px; margin-top: 8px; border-top: 1px solid var(--lg-line); }
+.lg-consent-list { display: grid; gap: 6px; font-size: 14px; }
+.lg-consent-list li { position: relative; padding-left: 20px; }
+.lg-consent-list li::before { content: "✓"; position: absolute; left: 0; color: var(--lg-mint); }
+.lg-consent-list.no li::before { content: "✕"; color: var(--lg-faint); }
+.lg-check { display: flex; align-items: center; gap: 12px; font-size: 16px; cursor: pointer; min-height: 44px; }
+.lg-check input { width: 22px; height: 22px; accent-color: var(--lg-mint); }
+.lg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.lg-code { font-family: var(--font-geist-mono, ui-monospace, monospace); font-size: 13px; background: var(--lg-p2); border-radius: 8px; padding: 8px 10px; word-break: break-all; }

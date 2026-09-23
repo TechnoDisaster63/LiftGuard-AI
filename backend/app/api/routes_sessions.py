@@ -95,7 +95,7 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
     ))
     db.commit()
 
-    return SessionStartResponse(session_id=session_id)
+    return SessionStartResponse(session_id=session_id, contributing=manager.contrib_recorder is not None)
 
 
 @router.post("/{session_id}/stop")

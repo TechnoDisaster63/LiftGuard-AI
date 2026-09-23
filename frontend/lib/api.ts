@@ -4,7 +4,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 const API_KEY = process.env.NEXT_PUBLIC_LIFTGUARD_API_KEY ?? "";
 
-function authHeaders(): HeadersInit {
+export function authHeaders(): HeadersInit {
   return API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {};
 }
 
@@ -20,10 +20,28 @@ export interface SessionStartRequest {
   model_complexity?: number;
   process_every_n?: number;
   use_temporal?: boolean;
+  // Opt-in data contribution (lib/contrib.ts). Ignored by the backend
+  // unless this id has given consent.
+  contributor_id?: string;
+  device_class?: "phone" | "tablet" | "desktop" | "unknown";
+  camera_facing?: "environment" | "user" | "unknown";
+}
+
+/** One saved contribution set (backend/app/contrib/store.py summary). */
+export interface ContributionSet {
+  set_id: string;
+  created_at: string;
+  movement_mode: string;
+  total_reps: number;
+  flagged_reps: number;
+  frames: number;
+  seconds: number | null;
+  self_label: { feel: string | null; counting_right: boolean | null } | null;
 }
 
 export interface SessionStartResponse {
   session_id: string;
+  contributing?: boolean;
   status: string;
 }
 
@@ -131,7 +149,7 @@ export const api = {
         body: JSON.stringify(body),
       }),
     stop: (sessionId: string) =>
-      request<{ status: string }>(`/api/sessions/${sessionId}/stop`, { method: "POST" }),
+      request<{ status: string; contribution?: ContributionSet | null }>(`/api/sessions/${sessionId}/stop`, { method: "POST" }),
     report: (sessionId: string) =>
       request<SessionReport>(`/api/sessions/${sessionId}/report`),
     list: () => request<{ active_sessions: string[] }>("/api/sessions"),
