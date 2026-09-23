@@ -88,4 +88,7 @@ export const FLAG_CUE: Record<string, { cue: string; why: string }> = {
   SHALLOW_PUSHUP: { cue: "Chest lower", why: "Elbow stayed above 110° at the bottom" },
   HIPS_SAGGING: { cue: "Hips up", why: "Hips dropped below the shoulder-ankle line" },
   HIPS_PIKING: { cue: "Hips down", why: "Hips rose above the shoulder-ankle line" },
+  SHALLOW_LUNGE: { cue: "Drop lower", why: "Front knee stayed above 110° at the bottom" },
+  FORWARD_LEAN: { cue: "Chest up", why: "Trunk leaned past 30° for part of the lunge" },
+  KNEE_PAST_TOES: { cue: "Longer stance", why: "Front knee travelled past the toes (measured distance)" },
 };
