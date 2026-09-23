@@ -54,6 +54,17 @@ class AnalysisConfig:
     baseline_reps: int = 3
     max_duration_seconds: float = 60.0
     max_frames: int = 3600
+    # Per-session threshold calibration (see calibrate_thresholds).
+    calibrate: bool = True
+    smoothing_seconds: float = 0.2
+    calibration_min_samples: int = 15
+    min_squat_rom_deg: float = 35.0
+    bottom_rom_fraction: float = 0.35
+    standing_rom_fraction: float = 0.25
+    bottom_limits_deg: tuple[float, float] = (70.0, 140.0)
+    standing_limits_deg: tuple[float, float] = (140.0, 175.0)
+    min_hysteresis_deg: float = 25.0
+    min_rep_rom_fraction: float = 0.5
 
 
 class MediaPipePoseDetector:
@@ -155,6 +166,102 @@ def _fatigue(reps: Sequence[dict], baseline_reps: int) -> dict:
     }
 
 
+def smooth(values: Sequence[float], window: int) -> list[float]:
+    """Centered running median; removes single-frame pose glitches."""
+    if window <= 1:
+        return list(values)
+    half = window // 2
+    return [float(np.median(values[max(0, i - half):i + half + 1])) for i in range(len(values))]
+
+
+def calibrate_thresholds(knee_angles: Sequence[float], config: AnalysisConfig) -> dict:
+    """Derive this session's rep thresholds from its own knee-angle distribution.
+
+    People squat to different depths and camera angles foreshorten joints, so a
+    fixed 105/155 degree rule undercounts honest reps. The standing reference
+    is the 90th percentile knee angle (the upright cluster) and the bottom
+    reference is the 5th percentile (the deep cluster). Thresholds sit inside
+    that observed range with guardrails (percentiles use raw angles so real
+    depth is not flattened; a handful of glitch frames cannot move P5/P90), and each rep must still cover a
+    minimum share of the observed range. If the whole session moves less than
+    ``min_squat_rom_deg`` there is no squat to count, and the result is zero
+    reps rather than thresholds shrunk until something counts.
+    """
+    fixed = {
+        "bottom_knee_deg": config.bottom_knee_deg,
+        "standing_knee_deg": config.standing_knee_deg,
+        "min_rep_rom_deg": 0.0,
+    }
+    if not config.calibrate:
+        return {"mode": "FIXED", **fixed, "reason": "calibration disabled"}
+    if len(knee_angles) < config.calibration_min_samples:
+        return {"mode": "FIXED", **fixed, "reason": "too few pose frames to calibrate"}
+    values = list(knee_angles)
+    standing_ref = float(np.percentile(values, 90))
+    bottom_ref = float(np.percentile(values, 5))
+    observed_rom = standing_ref - bottom_ref
+    base = {
+        "standing_reference_deg": round(standing_ref, 1),
+        "bottom_reference_deg": round(bottom_ref, 1),
+        "observed_rom_deg": round(observed_rom, 1),
+    }
+    if observed_rom < config.min_squat_rom_deg:
+        return {
+            "mode": "NO_SQUAT_MOTION", **fixed, **base,
+            "reason": f"knee angle range {observed_rom:.0f} deg is below the {config.min_squat_rom_deg:.0f} deg squat minimum",
+        }
+    bottom = float(np.clip(bottom_ref + config.bottom_rom_fraction * observed_rom, *config.bottom_limits_deg))
+    standing = float(np.clip(standing_ref - config.standing_rom_fraction * observed_rom, *config.standing_limits_deg))
+    if standing - bottom < config.min_hysteresis_deg:
+        bottom = standing - config.min_hysteresis_deg
+    return {
+        "mode": "CALIBRATED",
+        "bottom_knee_deg": round(bottom, 1),
+        "standing_knee_deg": round(standing, 1),
+        "min_rep_rom_deg": round(max(30.0, config.min_rep_rom_fraction * observed_rom), 1),
+        **base,
+        "reason": "percentile calibration from this session",
+    }
+
+
+def count_reps(frames: Sequence[dict | None], fps: float, config: AnalysisConfig, thresholds: dict) -> list[dict]:
+    """Hysteresis state machine over smoothed knee angles; raw values feed per-rep metrics."""
+    valid = [(i, m) for i, m in enumerate(frames) if m]
+    if not valid:
+        return []
+    # Median window of ~smoothing_seconds, odd length; off in FIXED mode to keep legacy behavior.
+    window = (int(fps * config.smoothing_seconds) | 1) if config.calibrate else 1
+    smoothed = smooth([m["knee_angle"] for _, m in valid], window)
+    bottom, standing = thresholds["bottom_knee_deg"], thresholds["standing_knee_deg"]
+    state, start_frame = "standing", 0
+    current: list[dict] = []
+    reps: list[dict] = []
+    for (frame_index, metrics), knee in zip(valid, smoothed):
+        current.append(metrics)
+        if state == "standing" and knee <= bottom:
+            state, start_frame, current = "bottom", frame_index, [metrics]
+        elif state == "bottom" and knee >= standing:
+            duration = (frame_index - start_frame) / fps
+            min_knee = min(m["knee_angle"] for m in current)
+            max_knee = max(m["knee_angle"] for m in current)
+            max_trunk = max(m["trunk_lean"] for m in current)
+            rom = max_knee - min_knee
+            if config.min_rep_seconds <= duration <= config.max_rep_seconds and rom >= thresholds["min_rep_rom_deg"]:
+                reps.append({
+                    "rep": len(reps) + 1,
+                    "start_seconds": round(start_frame / fps, 3),
+                    "end_seconds": round(frame_index / fps, 3),
+                    "duration_seconds": round(duration, 3),
+                    "min_knee_angle": round(min_knee, 1),
+                    "max_trunk_lean": round(max_trunk, 1),
+                    "rom_degrees": round(rom, 1),
+                    "form_flags": _form_flags(min_knee, max_trunk, rom),
+                    "_end_frame": frame_index,
+                })
+            state, current = "standing", []
+    return reps
+
+
 def _pixel(point: Point, width: int, height: int) -> tuple[int, int]:
     return int(point[0] * width), int(point[1] * height)
 
@@ -178,7 +285,8 @@ def skeleton_segments(points: Landmarks, min_visibility: float = SKELETON_MIN_VI
     return segments
 
 
-def _draw(frame: np.ndarray, points: Landmarks | None, metrics: dict | None, rep_count: int) -> None:
+def _draw(frame: np.ndarray, points: Landmarks | None, metrics: dict | None, rep_count: int,
+          thresholds: dict | None = None) -> None:
     height, width = frame.shape[:2]
     if points:
         # 1) Full MediaPipe skeleton, thin and neutral, visibility-gated so
@@ -206,6 +314,13 @@ def _draw(frame: np.ndarray, points: Landmarks | None, metrics: dict | None, rep
         text += f" | knee {metrics['knee_angle']:.0f} | trunk {metrics['trunk_lean']:.0f}"
     cv2.rectangle(frame, (10, 10), (min(width-10, 430), 48), (12, 18, 30), -1)
     cv2.putText(frame, text, (20, 37), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255,255,255), 2)
+    if thresholds:
+        if thresholds["mode"] == "NO_SQUAT_MOTION":
+            note = f"no squat motion (knee range {thresholds['observed_rom_deg']:.0f} deg) - 0 reps"
+        else:
+            note = f"{thresholds['mode'].lower()}: bottom<={thresholds['bottom_knee_deg']:.0f} stand>={thresholds['standing_knee_deg']:.0f}"
+        cv2.rectangle(frame, (10, 50), (min(width-10, 430), 74), (12, 18, 30), -1)
+        cv2.putText(frame, note, (20, 67), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 220, 255), 1)
 
 
 def analyze_video(
@@ -235,70 +350,69 @@ def analyze_video(
         raise ValueError(f"Video exceeds {config.max_duration_seconds:.0f}s/{config.max_frames} frame limit")
     owns_detector = detector is None
     detector = detector or MediaPipePoseDetector()
-    annotated = out / "annotated.mp4"
-    writer = cv2.VideoWriter(str(annotated), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
-    if not writer.isOpened():
-        capture.release()
-        raise RuntimeError("Cannot create annotated MP4")
 
-    state, start_frame = "standing", 0
-    current: list[dict] = []
-    reps: list[dict] = []
-    valid_frames = frame_index = 0
+    # Pass 1: pose + per-frame metrics. Frames are not kept in memory.
+    all_points: list[Landmarks | None] = []
+    all_metrics: list[dict | None] = []
     try:
-        while frame_index < config.max_frames:
+        while len(all_points) < config.max_frames:
             ok, frame = capture.read()
             if not ok:
                 break
             points = detector(frame)
-            metrics = _metrics(points, config.min_visibility) if points else None
-            if metrics:
-                valid_frames += 1
-                current.append(metrics)
-                knee = metrics["knee_angle"]
-                if state == "standing" and knee <= config.bottom_knee_deg:
-                    state, start_frame = "bottom", frame_index
-                    current = [metrics]
-                elif state == "bottom" and knee >= config.standing_knee_deg:
-                    duration = (frame_index - start_frame) / fps
-                    if config.min_rep_seconds <= duration <= config.max_rep_seconds:
-                        min_knee = min(m["knee_angle"] for m in current)
-                        max_knee = max(m["knee_angle"] for m in current)
-                        max_trunk = max(m["trunk_lean"] for m in current)
-                        rom = max_knee - min_knee
-                        reps.append({
-                            "rep": len(reps)+1,
-                            "start_seconds": round(start_frame/fps, 3),
-                            "end_seconds": round(frame_index/fps, 3),
-                            "duration_seconds": round(duration, 3),
-                            "min_knee_angle": round(min_knee, 1),
-                            "max_trunk_lean": round(max_trunk, 1),
-                            "rom_degrees": round(rom, 1),
-                            "form_flags": _form_flags(min_knee, max_trunk, rom),
-                        })
-                    state, current = "standing", []
-            _draw(frame, points, metrics, len(reps))
-            writer.write(frame)
-            frame_index += 1
+            all_points.append(points)
+            all_metrics.append(_metrics(points, config.min_visibility) if points else None)
     finally:
         capture.release()
-        writer.release()
         if owns_detector and hasattr(detector, "close"):
             detector.close()  # type: ignore[attr-defined]
 
-    coverage = valid_frames / max(frame_index, 1)
+    frame_index = len(all_points)
     if frame_index == 0:
         raise ValueError("Video contains no readable frames")
+    knees = [m["knee_angle"] for m in all_metrics if m]
+    coverage = len(knees) / frame_index
     if coverage < 0.5:
-        annotated.unlink(missing_ok=True)
         raise ValueError(f"Pose visible in only {coverage:.0%} of frames; record one person in full side view")
+
+    thresholds = calibrate_thresholds(knees, config)
+    reps = [] if thresholds["mode"] == "NO_SQUAT_MOTION" else count_reps(all_metrics, fps, config, thresholds)
+    end_frames = [rep.pop("_end_frame") for rep in reps]
+    message = None
+    if thresholds["mode"] == "NO_SQUAT_MOTION":
+        message = f"No squat movement detected: {thresholds['reason']}. Zero reps counted."
+    elif not reps:
+        message = "No complete squat reps detected with this session's calibrated thresholds."
+
+    # Pass 2: re-read the source and render the annotated MP4.
+    annotated = out / "annotated.mp4"
+    capture = cv2.VideoCapture(str(source))
+    writer = cv2.VideoWriter(str(annotated), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    if not writer.isOpened():
+        capture.release()
+        raise RuntimeError("Cannot create annotated MP4")
+    try:
+        done = 0
+        for index in range(frame_index):
+            ok, frame = capture.read()
+            if not ok:
+                break
+            while done < len(end_frames) and end_frames[done] <= index:
+                done += 1
+            _draw(frame, all_points[index], all_metrics[index], done, thresholds)
+            writer.write(frame)
+    finally:
+        capture.release()
+        writer.release()
+
     report = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "scope": "recorded side-view squat prototype",
         "disclaimer": "Form-risk flags and fatigue indicator only; not medical advice or injury probability.",
         "input": {"filename": source.name, "fps": round(fps, 3), "frames": frame_index, "pose_coverage": round(coverage, 3)},
         "config": asdict(config),
-        "summary": {"reps": len(reps), "flagged_reps": sum(bool(r["form_flags"]) for r in reps), "fatigue_indicator": _fatigue(reps, config.baseline_reps)},
+        "calibration": thresholds,
+        "summary": {"message": message, "reps": len(reps), "flagged_reps": sum(bool(r["form_flags"]) for r in reps), "fatigue_indicator": _fatigue(reps, config.baseline_reps)},
         "reps": reps,
         "artifacts": {"annotated_video": annotated.name, "csv": "reps.csv"},
     }
