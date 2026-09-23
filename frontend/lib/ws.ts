@@ -85,7 +85,10 @@ export function useLiveSession(sessionId: string | null) {
     // numbers so a stopped session doesn't look live.
     setTelemetry(null);
     setFrameUrl(null);
-    if (!sessionId) return;
+    if (!sessionId) {
+      setState("idle");
+      return;
+    }
 
     const wsBase = API_BASE.replace(/^http/, "ws");
     const url = new URL(`${wsBase}/ws/live/${sessionId}`);
