@@ -9,6 +9,10 @@ const backend = process.env.LIFTGUARD_BACKEND_URL;
 
 const nextConfig = {
   reactStrictMode: true,
+  // The demo runs `next dev` behind a tunnel (Codespaces, Cloudflare quick
+  // tunnel). Next 16 blocks dev resources on other hosts, so pages render
+  // but never hydrate (buttons do nothing) unless the host is allowed here.
+  allowedDevOrigins: ["*.trycloudflare.com", "*.app.github.dev"],
   ...(backend
     ? {
         async rewrites() {
