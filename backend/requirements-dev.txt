@@ -17,3 +17,7 @@ sqlalchemy>=2.0.0
 pytest>=8.0.0
 httpx>=0.27.0
 ruff>=0.5.0
+
+# Offline recorded-video analysis and deterministic artifact tests
+opencv-python-headless==4.8.0.74
+numpy==1.24.3
