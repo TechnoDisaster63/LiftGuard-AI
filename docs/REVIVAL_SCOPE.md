@@ -30,6 +30,15 @@ Each video now sets its own thresholds from its knee-angle distribution (`calibr
 
 This is calibration to the lifter, not loosening to force a count. Pose coverage under 50% still refuses to produce a report. `AnalysisConfig(calibrate=False)` restores the fixed rule; the golden fixture gives the same summary either way.
 
+### Leg gates: both knees bent and hips lowered
+
+Knee angle on one leg cannot tell a squat from lifting that leg. A held sprint "A-position" (thigh raised, standing on the other leg) counted as a squat rep because the measured knee was the lifted one. After a candidate rep passes the range and duration checks, two more checks apply (`_leg_gate`):
+
+- **Hip drop:** the hips must drop by at least 15% of the standing leg length (hip-to-ankle height, 90th percentile over the session) between the preceding standing phase and the bottom.
+- **Other knee:** when the other leg's hip, knee, and ankle are visible, its deepest knee angle in the rep must be within 20 deg of the bottom threshold. If the other leg is hidden (common in a true side view), only the hip-drop check applies.
+
+Rejected candidates are counted in `report.json` under `rep_gates`. Each counted rep records `hip_drop_ratio` and `other_min_knee_angle`. Known limits: a camera cut or zoom can fake a hip drop, and jumps with a deep dip (broad jumps) pass both checks. A "feet stay planted" check is the likely next gate.
+
 ## Explicitly out of scope for this challenge demo
 
 Arduino/laser feedback, face recognition, live multi-user streaming, clinical claims, injury probabilities, TCN/MC-dropout claims, multiple exercises, cloud deployment, and mobile apps. Existing modules remain experimental and are not evidence for this demo.

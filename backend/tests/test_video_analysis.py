@@ -12,6 +12,7 @@ from app.video_analysis.analyzer import (
     calibrate_thresholds,
     count_reps,
     _draw,
+    _metrics,
     analyze_video,
     angle,
     skeleton_segments,
@@ -194,3 +195,95 @@ def test_rep_rom_gate_rejects_partial_dips():
     config = AnalysisConfig()
     thresholds = calibrate_thresholds(trace, config)
     assert len(count_reps(frames_from(trace), 25, config, thresholds)) == 4
+
+
+# --- Leg gates: both knees bent + hip drop -------------------------------------------------
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def load_landmark_fixture(name):
+    import gzip
+
+    with gzip.open(FIXTURES / name, "rt") as handle:
+        data = json.load(handle)
+    frames = []
+    for row in data["frames"]:
+        if row is None:
+            frames.append(None)
+            continue
+        points = {key: tuple(row[i * 3:i * 3 + 3]) for i, key in enumerate(data["keys"])}
+        for alias in ("shoulder", "hip", "knee", "ankle"):
+            points[alias] = points[f"left_{alias}"]
+        frames.append(_metrics(points, AnalysisConfig().min_visibility))
+    return data["fps"], frames
+
+
+def count_fixture(name, **overrides):
+    fps, frames = load_landmark_fixture(name)
+    config = AnalysisConfig(**overrides)
+    thresholds = calibrate_thresholds([m["knee_angle"] for m in frames if m], config)
+    log = {}
+    return count_reps(frames, fps, config, thresholds, log), log
+
+
+def test_a_position_hold_is_not_a_squat():
+    # Regression: video 4 at 72.1-74.9 s counted 1 squat. The measured knee was the lifted leg.
+    reps, log = count_fixture("a_position_hold.json.gz")
+    assert reps == []
+    assert log["rejected_other_knee"] == 1
+    ungated, _ = count_fixture("a_position_hold.json.gz", leg_gates=False)
+    assert len(ungated) == 1  # the fixture reproduces the original false rep
+
+
+def test_front_view_squats_still_count_15():
+    reps, log = count_fixture("front_view_squats.json.gz")
+    assert len(reps) == 15
+    assert log["rejected_hip_drop"] == 0 and log["rejected_other_knee"] == 0
+    assert all(r["hip_drop_ratio"] >= AnalysisConfig().min_hip_drop_fraction for r in reps)
+    assert 15.0 <= reps[0]["start_seconds"] and reps[-1]["end_seconds"] <= 45.0
+
+
+def leg_frames(knee_trace, hip_trace, other_trace=None):
+    frames = []
+    for i, (knee, hip) in enumerate(zip(knee_trace, hip_trace)):
+        other = None if other_trace is None else other_trace[i]
+        frames.append({"knee_angle": knee, "trunk_lean": 8.0, "hip_y": hip,
+                       "leg_extent": 0.9 - hip, "other_knee_angle": other})
+    return frames
+
+
+def squat_like(reps=4, drop=0.15, other_bends=True):
+    down = list(np.linspace(178, 95, 15))
+    knee = ([178.0] * 5 + down + down[::-1]) * reps
+    hip = ([0.40] * 5 + list(np.linspace(0.40, 0.40 + drop, 15)) + list(np.linspace(0.40 + drop, 0.40, 15))) * reps
+    other = knee if other_bends else [177.0] * len(knee)
+    return knee, hip, other
+
+
+def test_knee_lift_without_hip_drop_is_rejected():
+    knee, _, other = squat_like()
+    frames = leg_frames(knee, [0.40] * len(knee), other)
+    config = AnalysisConfig()
+    thresholds = calibrate_thresholds(knee, config)
+    log = {}
+    assert count_reps(frames, 25, config, thresholds, log) == []
+    assert log["rejected_hip_drop"] == 4
+
+
+def test_straight_other_leg_is_rejected():
+    knee, hip, other = squat_like(other_bends=False)
+    config = AnalysisConfig()
+    thresholds = calibrate_thresholds(knee, config)
+    log = {}
+    assert count_reps(leg_frames(knee, hip, other), 25, config, thresholds, log) == []
+    assert log["rejected_other_knee"] == 4
+
+
+def test_real_squat_passes_both_leg_gates():
+    knee, hip, other = squat_like()
+    config = AnalysisConfig()
+    thresholds = calibrate_thresholds(knee, config)
+    reps = count_reps(leg_frames(knee, hip, other), 25, config, thresholds)
+    assert len(reps) == 4
+    assert all(r["hip_drop_ratio"] > 0.15 and r["other_min_knee_angle"] <= 100 for r in reps)

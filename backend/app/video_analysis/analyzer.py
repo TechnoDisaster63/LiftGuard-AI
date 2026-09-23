@@ -65,6 +65,10 @@ class AnalysisConfig:
     standing_limits_deg: tuple[float, float] = (140.0, 175.0)
     min_hysteresis_deg: float = 25.0
     min_rep_rom_fraction: float = 0.5
+    # Leg gates (see count_reps): a squat bends both knees and lowers the hips.
+    leg_gates: bool = True
+    min_hip_drop_fraction: float = 0.15
+    other_knee_margin_deg: float = 20.0
 
 
 class MediaPipePoseDetector:
@@ -124,7 +128,18 @@ def _metrics(points: Landmarks, min_visibility: float) -> dict | None:
         return None
     knee = angle(points["hip"], points["knee"], points["ankle"])
     trunk = angle((points["hip"][0], points["hip"][1] - 1, 1), points["hip"], points["shoulder"])
-    return {"knee_angle": round(knee, 2), "trunk_lean": round(trunk, 2)}
+    metrics = {
+        "knee_angle": round(knee, 2),
+        "trunk_lean": round(trunk, 2),
+        # Image y grows downward: a larger hip_y means lower hips.
+        "hip_y": round(points["hip"][1], 5),
+        "leg_extent": round(points["ankle"][1] - points["hip"][1], 5),
+        "other_knee_angle": None,
+    }
+    other = ("right_hip", "right_knee", "right_ankle")
+    if all(name in points and points[name][2] >= min_visibility for name in other):
+        metrics["other_knee_angle"] = round(angle(points["right_hip"], points["right_knee"], points["right_ankle"]), 2)
+    return metrics
 
 
 def _form_flags(min_knee: float, max_trunk: float, rom: float) -> list[str]:
@@ -224,11 +239,45 @@ def calibrate_thresholds(knee_angles: Sequence[float], config: AnalysisConfig) -
     }
 
 
-def count_reps(frames: Sequence[dict | None], fps: float, config: AnalysisConfig, thresholds: dict) -> list[dict]:
+def _leg_gate(since_standing: Sequence[dict], current: Sequence[dict], thresholds: dict,
+              leg_ref: float | None, config: AnalysisConfig) -> tuple[str | None, dict]:
+    """Check that a candidate rep looks like a squat, not a knee lift.
+
+    Knee angle on one leg cannot tell a squat from lifting that leg (for example
+    a sprint A-position hold). A squat also (1) bends the other knee and
+    (2) lowers the hips. Returns (rejection reason or None, evidence).
+    """
+    evidence: dict = {}
+    hips = [m["hip_y"] for m in (*since_standing, *current) if m.get("hip_y") is not None]
+    if leg_ref and hips:
+        low = max(m["hip_y"] for m in current if m.get("hip_y") is not None)
+        drop = (low - min(hips)) / leg_ref
+        evidence["hip_drop_ratio"] = round(drop, 3)
+        if drop < config.min_hip_drop_fraction:
+            return "hip_drop", evidence
+    others = [m["other_knee_angle"] for m in current if m.get("other_knee_angle") is not None]
+    if others:
+        evidence["other_min_knee_angle"] = round(min(others), 1)
+        if min(others) > thresholds["bottom_knee_deg"] + config.other_knee_margin_deg:
+            return "other_knee", evidence
+    return None, evidence
+
+
+def count_reps(frames: Sequence[dict | None], fps: float, config: AnalysisConfig, thresholds: dict,
+               gate_log: dict | None = None) -> list[dict]:
     """Hysteresis state machine over smoothed knee angles; raw values feed per-rep metrics."""
     valid = [(i, m) for i, m in enumerate(frames) if m]
     if not valid:
         return []
+    extents = [m["leg_extent"] for _, m in valid if m.get("leg_extent")]
+    # Standing leg length reference: upright frames dominate the upper percentiles.
+    leg_ref = float(np.percentile(extents, 90)) if extents and config.leg_gates else None
+    if leg_ref is not None and leg_ref <= 0:
+        leg_ref = None
+    log = gate_log if gate_log is not None else {}
+    log.update({"enabled": config.leg_gates, "leg_reference": round(leg_ref, 4) if leg_ref else None,
+                "rejected_hip_drop": 0, "rejected_other_knee": 0, "rejected_rom_or_duration": 0})
+    since_standing: list[dict] = []
     # Median window of ~smoothing_seconds, odd length; off in FIXED mode to keep legacy behavior.
     window = (int(fps * config.smoothing_seconds) | 1) if config.calibrate else 1
     smoothed = smooth([m["knee_angle"] for _, m in valid], window)
@@ -238,6 +287,8 @@ def count_reps(frames: Sequence[dict | None], fps: float, config: AnalysisConfig
     reps: list[dict] = []
     for (frame_index, metrics), knee in zip(valid, smoothed):
         current.append(metrics)
+        if state == "standing":
+            since_standing.append(metrics)
         if state == "standing" and knee <= bottom:
             state, start_frame, current = "bottom", frame_index, [metrics]
         elif state == "bottom" and knee >= standing:
@@ -246,7 +297,14 @@ def count_reps(frames: Sequence[dict | None], fps: float, config: AnalysisConfig
             max_knee = max(m["knee_angle"] for m in current)
             max_trunk = max(m["trunk_lean"] for m in current)
             rom = max_knee - min_knee
-            if config.min_rep_seconds <= duration <= config.max_rep_seconds and rom >= thresholds["min_rep_rom_deg"]:
+            reason, evidence = (None, {})
+            if not (config.min_rep_seconds <= duration <= config.max_rep_seconds and rom >= thresholds["min_rep_rom_deg"]):
+                reason = "rom_or_duration"
+            elif config.leg_gates:
+                reason, evidence = _leg_gate(since_standing, current, thresholds, leg_ref, config)
+            if reason:
+                log[f"rejected_{reason}"] += 1
+            else:
                 reps.append({
                     "rep": len(reps) + 1,
                     "start_seconds": round(start_frame / fps, 3),
@@ -256,9 +314,11 @@ def count_reps(frames: Sequence[dict | None], fps: float, config: AnalysisConfig
                     "max_trunk_lean": round(max_trunk, 1),
                     "rom_degrees": round(rom, 1),
                     "form_flags": _form_flags(min_knee, max_trunk, rom),
+                    "hip_drop_ratio": evidence.get("hip_drop_ratio"),
+                    "other_min_knee_angle": evidence.get("other_min_knee_angle"),
                     "_end_frame": frame_index,
                 })
-            state, current = "standing", []
+            state, current, since_standing = "standing", [], [metrics]
     return reps
 
 
@@ -376,7 +436,8 @@ def analyze_video(
         raise ValueError(f"Pose visible in only {coverage:.0%} of frames; record one person in full side view")
 
     thresholds = calibrate_thresholds(knees, config)
-    reps = [] if thresholds["mode"] == "NO_SQUAT_MOTION" else count_reps(all_metrics, fps, config, thresholds)
+    gate_log: dict = {}
+    reps = [] if thresholds["mode"] == "NO_SQUAT_MOTION" else count_reps(all_metrics, fps, config, thresholds, gate_log)
     end_frames = [rep.pop("_end_frame") for rep in reps]
     message = None
     if thresholds["mode"] == "NO_SQUAT_MOTION":
@@ -412,13 +473,14 @@ def analyze_video(
         "input": {"filename": source.name, "fps": round(fps, 3), "frames": frame_index, "pose_coverage": round(coverage, 3)},
         "config": asdict(config),
         "calibration": thresholds,
+        "rep_gates": gate_log,
         "summary": {"message": message, "reps": len(reps), "flagged_reps": sum(bool(r["form_flags"]) for r in reps), "fatigue_indicator": _fatigue(reps, config.baseline_reps)},
         "reps": reps,
         "artifacts": {"annotated_video": annotated.name, "csv": "reps.csv"},
     }
     (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     with (out / "reps.csv").open("w", newline="", encoding="utf-8") as handle:
-        fields = ["rep", "start_seconds", "end_seconds", "duration_seconds", "min_knee_angle", "max_trunk_lean", "rom_degrees", "form_flags"]
+        fields = ["rep", "start_seconds", "end_seconds", "duration_seconds", "min_knee_angle", "max_trunk_lean", "rom_degrees", "hip_drop_ratio", "other_min_knee_angle", "form_flags"]
         writer_csv = csv.DictWriter(handle, fieldnames=fields)
         writer_csv.writeheader()
         for rep in reps:
