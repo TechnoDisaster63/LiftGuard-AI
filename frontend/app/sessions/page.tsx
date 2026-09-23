@@ -1,125 +1,147 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { Square, FileText, ListVideo, History } from "lucide-react";
-import { api, SessionHistoryItem } from "@/lib/api";
-import { Card, CardEyebrow } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { RecentReportsFolder } from "@/components/dashboard/RecentReportsFolder";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
+import { useSessionRows, FATIGUE_LABEL } from "@/lib/history";
+import { Alert, Split, Spinner, fmtDate, fmtDuration } from "@/components/lg/ui";
+
+const COLS = "150px 180px minmax(0,1fr) 110px 150px 80px";
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState<string[]>([]);
-  const [history, setHistory] = useState<SessionHistoryItem[]>([]);
+  const router = useRouter();
+  const [active, setActive] = useState<string[]>([]);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [stopError, setStopError] = useState<string | null>(null);
+  const { rows, error, reload } = useSessionRows({ limit: 30 });
 
-  const refresh = () => api.sessions.list().then((r) => setSessions(r.active_sessions)).catch(() => {});
-  const refreshHistory = () => api.sessions.history({ limit: 20 }).then((r) => setHistory(r.sessions)).catch(() => {});
-
+  const refreshActive = useCallback(() => api.sessions.list().then((r) => setActive(r.active_sessions)).catch(() => {}), []);
   useEffect(() => {
-    refresh();
-    refreshHistory();
-    const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    refreshActive();
+    const t = setInterval(refreshActive, 5000);
+    return () => clearInterval(t);
+  }, [refreshActive]);
 
   const stop = async (id: string) => {
-    await api.sessions.stop(id).catch(() => {});
-    refresh();
-    refreshHistory();
+    setStoppingId(id);
+    setStopError(null);
+    try {
+      await api.sessions.stop(id);
+    } catch (e) {
+      setStopError(`Couldn't stop ${id.slice(0, 8)}: ${e instanceof Error ? e.message : ""}`);
+    }
+    setStoppingId(null);
+    refreshActive();
+    reload();
   };
 
+  const totalReps = (rows ?? []).reduce((a, r) => a + (r.reps ?? 0), 0);
+
   return (
-    <div className="space-y-8">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <RecentReportsFolder />
-      </motion.div>
-
-      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }} className="space-y-3">
-        <div className="flex items-center justify-between">
-          <CardEyebrow>Active Sessions</CardEyebrow>
-          <p className="text-xs text-ink-faint">Live, from backend memory</p>
+    <div className="lg-fade">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="lg-m lg-dim">Saved sessions</div>
+          <div className="lg-d mt-1.5" style={{ fontSize: 92 }}>
+            {rows === null ? "…" : `${rows.length} ${rows.length === 1 ? "session" : "sessions"} · ${totalReps} reps`}
+          </div>
         </div>
+        <Link href="/live" className="lg-btn">
+          New session
+        </Link>
+      </div>
 
-        {sessions.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon={<ListVideo size={22} strokeWidth={1.5} />}
-              message="No active sessions"
-              actionLabel="Start one from Live Analysis"
-              actionHref="/live"
-            />
-          </Card>
-        ) : (
-          <Card className="p-0 divide-y divide-border overflow-hidden">
-            {sessions.map((id, i) => (
-              <motion.div
-                key={id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-center justify-between px-5 py-4"
-              >
-                <div>
-                  <p className="text-sm text-ink font-mono">{id}</p>
-                  <Badge tone="brand" dot className="mt-1.5">
-                    Active
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Link href={`/reports?session=${id}`}>
-                    <Button variant="ghost" size="icon" aria-label="View report">
-                      <FileText size={16} />
-                    </Button>
-                  </Link>
-                  <Button variant="danger" size="icon" onClick={() => stop(id)} aria-label="Stop session">
-                    <Square size={16} />
-                  </Button>
-                </div>
-              </motion.div>
-            ))}
-          </Card>
+      {active.length > 0 && (
+        <div className="lg-card mt-6" style={{ borderLeft: "4px solid var(--lg-amber)" }}>
+          <div className="lg-m" style={{ color: "var(--lg-amber)" }}>
+            Running now · holds the camera until stopped
+          </div>
+          {active.map((id) => (
+            <div key={id} className="flex items-center justify-between mt-3">
+              <span className="lg-m">{id}</span>
+              <div className="flex gap-2">
+                <Link className="lg-btn g" href={`/reports?session=${id}`}>
+                  Live report
+                </Link>
+                <button className="lg-btn warn" onClick={() => stop(id)} disabled={stoppingId === id}>
+                  {stoppingId === id ? (
+                    <>
+                      <Spinner /> Stopping
+                    </>
+                  ) : (
+                    "Stop and save"
+                  )}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {(error || stopError) && (
+        <div className="mt-4">
+          <Alert>{stopError ?? error}</Alert>
+        </div>
+      )}
+
+      <div className="mt-7">
+        <div className="grid gap-5 pb-2.5 lg-m lg-faint" style={{ gridTemplateColumns: COLS }}>
+          <span>Started</span>
+          <span>Person</span>
+          <span>Clean vs flagged</span>
+          <span>Reps</span>
+          <span>Fatigue</span>
+          <span>Length</span>
+        </div>
+        {rows === null &&
+          [0, 1, 2, 3].map((i) => (
+            <div key={i} className="lg-row py-4">
+              <div className="lg-skel" style={{ height: 22 }} />
+            </div>
+          ))}
+        {rows?.length === 0 && !error && (
+          <div className="lg-row py-12 text-center">
+            <div className="lg-d" style={{ fontSize: 56, color: "var(--lg-faint)" }}>
+              No sessions yet
+            </div>
+            <Link href="/live" className="lg-btn mt-5">
+              Start the first one
+            </Link>
+          </div>
         )}
-      </motion.section>
-
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="space-y-3"
-      >
-        <CardEyebrow>Past Sessions</CardEyebrow>
-
-        {history.length === 0 ? (
-          <Card>
-            <EmptyState icon={<History size={22} strokeWidth={1.5} />} message="No completed sessions yet" />
-          </Card>
-        ) : (
-          <Card className="p-0 divide-y divide-border overflow-hidden">
-            {history.map((h, i) => (
-              <Link key={h.session_id} href={`/reports?history=${h.session_id}`}>
-                <motion.div
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors"
-                >
-                  <div>
-                    <p className="text-sm text-ink">
-                      {h.display_name} {h.is_guest && <span className="text-ink-faint">(guest)</span>}
-                    </p>
-                    <p className="text-[11px] font-mono text-ink-faint mt-0.5">
-                      {h.started_at ? new Date(h.started_at).toLocaleString() : "—"}
-                    </p>
-                  </div>
-                </motion.div>
-              </Link>
-            ))}
-          </Card>
-        )}
-      </motion.section>
+        {rows?.map((r) => {
+          const reps = r.reps ?? 0;
+          const flagged = r.flagged ?? 0;
+          const fat = FATIGUE_LABEL[r.fatigueStatus ?? ""];
+          return (
+            <div
+              key={r.session_id}
+              role="link"
+              tabIndex={0}
+              onClick={() => router.push(`/reports?history=${r.session_id}`)}
+              onKeyDown={(e) => e.key === "Enter" && router.push(`/reports?history=${r.session_id}`)}
+              className="lg-row lg-hoverrow grid items-center gap-5 py-4 cursor-pointer"
+              style={{ gridTemplateColumns: COLS }}
+            >
+              <span className="lg-m">{fmtDate(r.started_at)}</span>
+              <span style={{ fontSize: 16 }}>{r.is_guest ? "Guest" : r.display_name}</span>
+              <div>
+                <Split clean={reps - flagged} flagged={flagged} />
+                <div className="lg-m lg-faint mt-1.5" style={{ fontSize: 10 }}>
+                  {r.report ? (reps ? `${reps - flagged} clean · ${flagged} flagged` : "No reps counted") : "Report unavailable"}
+                </div>
+              </div>
+              <span className="lg-d" style={{ fontSize: 40 }}>
+                {r.reps ?? "—"}
+              </span>
+              <span className="lg-m" style={{ color: fat?.color ?? "var(--lg-faint)" }}>
+                {fat?.text ?? "—"}
+              </span>
+              <span className="lg-m lg-dim">{fmtDuration(r.started_at, r.ended_at)}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

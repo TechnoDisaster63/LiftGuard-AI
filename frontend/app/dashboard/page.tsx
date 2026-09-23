@@ -2,166 +2,109 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { Activity, Users, ListVideo, ArrowUpRight } from "lucide-react";
-import { api, UserOut } from "@/lib/api";
-import MagicBento from "@/components/reactbits/MagicBento";
-import { RecentReportsFolder } from "@/components/dashboard/RecentReportsFolder";
-import { SparklesCore } from "@/components/ui/sparkles";
-import { Card, CardHeader, CardTitle, CardEyebrow } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-
-const cardVariants = {
-  hidden: { opacity: 0, y: 12 },
-  show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.06, duration: 0.35 } }),
-};
+import { api, SessionDefaults, UserOut } from "@/lib/api";
+import { useBackendOnline } from "@/components/layout/TopNav";
+import { useSessionRows, FATIGUE_LABEL } from "@/lib/history";
+import { Split, fmtDate } from "@/components/lg/ui";
 
 export default function DashboardPage() {
-  const [activeSessions, setActiveSessions] = useState<string[]>([]);
-  const [users, setUsers] = useState<UserOut[]>([]);
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const online = useBackendOnline();
+  const [defaults, setDefaults] = useState<SessionDefaults | null>(null);
+  const [users, setUsers] = useState<UserOut[] | null>(null);
+  const [active, setActive] = useState<string[]>([]);
+  const { rows } = useSessionRows({ limit: 1 });
+  const last = rows?.[0] ?? null;
 
   useEffect(() => {
-    api.health()
-      .then(() => setBackendOnline(true))
-      .catch(() => setBackendOnline(false));
-    api.sessions.list().then((r) => setActiveSessions(r.active_sessions)).catch(() => {});
-    api.users.list().then(setUsers).catch(() => {});
+    api.settings.get().then(setDefaults).catch(() => {});
+    api.users.list().then(setUsers).catch(() => setUsers(null));
+    api.sessions.list().then((r) => setActive(r.active_sessions)).catch(() => {});
   }, []);
 
-  const stats = [
-    { label: "Active Sessions", value: activeSessions.length.toString(), icon: Activity },
-    { label: "Registered Users", value: users.length.toString(), icon: Users },
-    {
-      label: "Backend",
-      value: backendOnline === null ? "Checking…" : backendOnline ? "Online" : "Offline",
-      icon: ListVideo,
-      dim: !backendOnline,
-    },
+  const pre: [string, string, string][] = [
+    ["Movement mode", "Squat", "var(--lg-ink)"],
+    ["Backend", online === null ? "Checking" : online ? "Online" : "Offline", online ? "var(--lg-mint)" : online === false ? "var(--lg-amber)" : "var(--lg-faint)"],
+    ["Camera", defaults ? `Index ${defaults.camera_id} · opens at start` : "—", "var(--lg-dim)"],
+    ["Voice cues", defaults ? (defaults.voice_enabled ? "On" : "Off") : "—", defaults?.voice_enabled ? "var(--lg-mint)" : "var(--lg-faint)"],
+    ["Laser pointer", defaults ? (defaults.arduino_enabled ? "Tries to connect at start" : "Off") : "—", defaults?.arduino_enabled ? "var(--lg-dim)" : "var(--lg-faint)"],
+    ["Face ID", users ? (users.length ? `${users.length} ${users.length === 1 ? "person" : "people"} enrolled` : "Nobody enrolled · guest") : "—", users?.length ? "var(--lg-mint)" : "var(--lg-faint)"],
   ];
 
   return (
-    <div className="space-y-8">
-      {/* Hero */}
-      <div className="relative h-40 rounded-panel border border-border overflow-hidden bg-panel">
-        <div className="absolute inset-0">
-          <SparklesCore
-            background="transparent"
-            minSize={0.3}
-            maxSize={1}
-            particleDensity={50}
-            particleColor="#7C5CFF"
-            speed={1.5}
-            className="w-full h-full"
-          />
+    <div className="lg-fade grid gap-7" style={{ gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr)", minHeight: "calc(100vh - 150px)" }}>
+      <div className="relative rounded-[18px] overflow-hidden flex flex-col justify-end p-9" style={{ background: "radial-gradient(120% 90% at 20% 10%, #1c1c20, #0b0b0c)" }}>
+        {active.length > 0 && (
+          <Link href="/sessions" className="lg-chip lg-m absolute left-6 top-6" style={{ color: "var(--lg-amber)", borderColor: "color-mix(in srgb, var(--lg-amber) 40%, transparent)" }}>
+            {active.length} session running · manage
+          </Link>
+        )}
+        <div style={{ fontSize: 26, fontWeight: 600, maxWidth: 560, lineHeight: 1.2 }}>Real-time movement analysis for injury prevention.</div>
+        <div className="lg-m lg-dim mt-2.5">Movement mode: squat · watches depth, trunk lean, range of motion</div>
+        <div className="lg-d mt-3" style={{ fontSize: "clamp(120px, 17vw, 240px)", color: online === false ? "var(--lg-idle)" : undefined }}>
+          {online === false ? "Offline" : "Ready"}
         </div>
-        <div className="absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,transparent_10%,black)]" />
-        <div className="relative h-full flex flex-col items-center justify-center text-center px-6 pointer-events-none">
-          <motion.h1
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="font-display text-3xl md:text-4xl gradient-brand-text"
-          >
-            LiftGuard AI
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="text-sm text-ink-muted mt-2"
-          >
-            Real-time pose tracking and squat rep counting
-          </motion.p>
+        <div className="flex gap-3 mt-5">
+          <Link href="/live?start=1" className="lg-btn lg" aria-disabled={online === false}>
+            Start session
+          </Link>
+          <Link href="/settings" className="lg-btn g lg">
+            Session settings
+          </Link>
         </div>
       </div>
-
-      {backendOnline === false && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="rounded-control border border-risk-high/30 bg-risk-high/5 px-4 py-3 text-sm text-risk-high"
-        >
-          Can&apos;t reach the backend at the configured API URL. Start it with{" "}
-          <code className="font-mono">uvicorn app.main:app --reload</code> from{" "}
-          <code className="font-mono">backend/</code>.
-        </motion.div>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {stats.map((s, i) => (
-          <motion.div key={s.label} custom={i} initial="hidden" animate="show" variants={cardVariants}>
-            <Card>
-              <CardHeader>
-                <CardEyebrow>{s.label}</CardEyebrow>
-                <s.icon size={16} className="text-brand" strokeWidth={1.75} />
-              </CardHeader>
-              <p className={`font-display text-3xl tabular ${s.dim ? "text-ink-faint" : "text-ink"}`}>
-                {s.value}
-              </p>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Feature grid */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
-        <CardEyebrow className="mb-3">Explore</CardEyebrow>
-        <MagicBento
-          textAutoHide
-          enableStars
-          enableSpotlight
-          enableBorderGlow
-          enableTilt={false}
-          enableMagnetism
-          clickEffect
-          spotlightRadius={280}
-          particleCount={8}
-          glowColor="124, 92, 255"
-        />
-      </motion.div>
-
-      {/* Users + recent reports */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
-          <Card className="p-6 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <CardTitle>Registered Users</CardTitle>
-              <Link href="/register">
-                <Button variant="outline-brand" size="sm">
-                  <ArrowUpRight size={13} /> Register
-                </Button>
-              </Link>
+      <div className="flex flex-col gap-4">
+        <div className="lg-card">
+          <div className="lg-m lg-dim mb-3.5">Pre-flight</div>
+          {pre.map(([a, b, c]) => (
+            <div key={a} className="lg-row flex justify-between py-2.5" style={{ fontSize: 16 }}>
+              <span>{a}</span>
+              <span className="lg-m" style={{ color: c }}>
+                {b}
+              </span>
             </div>
-            {users.length === 0 ? (
-              <p className="text-sm text-ink-muted">
-                No users registered yet —{" "}
-                <Link href="/register" className="text-brand hover:underline">
-                  register the first one
-                </Link>
-                .
+          ))}
+        </div>
+        <div className="lg-card flex-1">
+          {rows === null ? (
+            <div className="lg-skel" style={{ height: 180 }} />
+          ) : !last ? (
+            <>
+              <div className="lg-m lg-dim">Last session</div>
+              <div className="lg-d mt-4" style={{ fontSize: 64, color: "var(--lg-faint)" }}>
+                None yet
+              </div>
+              <p className="lg-dim mt-3" style={{ fontSize: 15 }}>
+                Start a session and its reps, flags and fatigue indicator land here.
               </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {users.map((u) => (
-                  <li key={u.user_id} className="py-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-ink">{u.display_name}</p>
-                      <p className="text-[11px] font-mono text-ink-faint">@{u.username}</p>
-                    </div>
-                    <p className="text-xs text-ink-muted tabular">
-                      {u.total_sessions} session{u.total_sessions === 1 ? "" : "s"}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}>
-          <RecentReportsFolder />
-        </motion.div>
+            </>
+          ) : (
+            <>
+              <div className="lg-m lg-dim">
+                Last session · {fmtDate(last.started_at)} · {last.is_guest ? "Guest" : last.display_name}
+              </div>
+              <div className="flex items-end gap-5 mt-2.5">
+                <div className="lg-d" style={{ fontSize: 150 }}>
+                  {last.reps ?? "—"}
+                </div>
+                <div style={{ paddingBottom: 18 }}>
+                  <div className="lg-m lg-dim">Reps</div>
+                  <div style={{ fontSize: 15, marginTop: 6 }}>
+                    {last.flagged ?? 0} flagged · fatigue {(FATIGUE_LABEL[last.fatigueStatus ?? ""]?.text ?? "—").toLowerCase()}
+                  </div>
+                </div>
+              </div>
+              <Split clean={(last.reps ?? 0) - (last.flagged ?? 0)} flagged={last.flagged ?? 0} className="mt-2.5" />
+              <div className="flex gap-2.5 mt-5">
+                <Link className="lg-btn g" href={`/reports?history=${last.session_id}`}>
+                  Open report
+                </Link>
+                <Link className="lg-btn g" href="/sessions">
+                  All sessions
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
