@@ -1,0 +1,112 @@
+[live_from_file] camera index -> /tmp/squat.webm @ 30 fps (realtime pacing)
+INFO:     Started server process [33261]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55456 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55356 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:55356 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:55356 - "OPTIONS /api/sessions/start HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:47854 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:51396 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:55814 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:43638 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:59016 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:60580 - "OPTIONS /api/health HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:52852 - "OPTIONS /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52854 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52854 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52854 - "OPTIONS /api/sessions/start HTTP/1.1" 200 OK
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+
+============================================================
+   LIFTGUARD AI V2 — LOADING MODULES
+============================================================
+⚠️ TCN not available, will use frame-level only
+⚠️ Original risk_classifier not available
+✅ temporal_risk_classifier_v2.py
+✅ uncertainty_manager.py
+✅ fatigue_engine.py
+✅ injury_risk_index_v2.py (IRI V2)
+✅ exercise_tracker.py
+✅ arduino_controller.py
+   ✅ OpenCV Lite Face Manager loaded (no TensorFlow needed)
+✅ user_manager_lite.py (OpenCV LBPH — no TF conflicts)
+✅ pyttsx3
+============================================================
+
+============================================================
+🚀 INITIALIZING LIFTGUARD AI V2
+============================================================
+
+⚡ complexity=0, skip=1
+🧠 Temporal: ON
+
+📦 Loading components...
+🔀 Hybrid Risk Classifier initialized
+   Temporal mode: DISABLED
+   Fusion weight: 70% TCN, 30% Frame
+   ⚠️ Frame-level classifier not available
+
+✅ Hybrid classifier ready!
+   ✅ Hybrid Risk Classifier (TCN + Frame)
+⚡ Fatigue Detection Engine initialized
+   ✅ Fatigue Engine
+
+📊 Training IRI models...
+   ✅ Acute Model ROC-AUC:       1.000 (95% CI: 1.000-1.000)
+   ✅ Acute Calibration ECE:      0.0014
+   ✅ Cumulative Model ROC-AUC:   1.000 (95% CI: 1.000-1.000)
+   ✅ Cumulative Calibration ECE: 0.0014
+🏥 Injury Risk Index V2 initialized
+   ⚕️ DISCLAIMER: IRI is not a medical diagnosis
+   ✅ Injury Risk Index V2
+🏋️ Exercise Tracker initialized
+   ✅ Exercise Tracker
+🎲 Uncertainty Manager initialized
+   ✅ Uncertainty Manager
+   ℹ️  No face data in DB yet
+   📁 DB: liftguard_users.db (0 users)
+   ✅ User Manager
+   ✅ Form Corrector
+⚠️  Voice failed: libespeak.so.1: cannot open shared object file: No such file or directory
+
+🔌 Attempting Arduino connection...
+Arduino not found!
+   ⚠️  Arduino not found
+
+📷 MediaPipe (complexity=0)
+
+============================================================
+✅ LIFTGUARD AI V2 READY
+============================================================
+
+  👤 Guest (no enrolled users or face ID unavailable)
+INFO:     127.0.0.1:52852 - "POST /api/sessions/start HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52866 - "WebSocket /ws/live/3d56ce36-0416-46b4-a83f-e9381972d693" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:35772 - "GET /api/health HTTP/1.1" 200 OK
+[ERROR:2@329.625] global cap.cpp:164 open VIDEOIO(CV_IMAGES): raised OpenCV exception:
+
+OpenCV(4.8.0) /io/opencv/modules/videoio/src/cap_images.cpp:253: error: (-5:Bad argument) CAP_IMAGES: can't find starting number (in the name of file): /nonexistent-cam in function 'icvExtractPattern'
+
+
+[ERROR:2@337.035] global cap.cpp:164 open VIDEOIO(CV_IMAGES): raised OpenCV exception:
+
+OpenCV(4.8.0) /io/opencv/modules/videoio/src/cap_images.cpp:253: error: (-5:Bad argument) CAP_IMAGES: can't find starting number (in the name of file): /nonexistent-cam in function 'icvExtractPattern'
+
+
+INFO:     127.0.0.1:47574 - "GET /api/health HTTP/1.1" 200 OK
+[ERROR:2@343.716] global cap.cpp:164 open VIDEOIO(CV_IMAGES): raised OpenCV exception:
+
+OpenCV(4.8.0) /io/opencv/modules/videoio/src/cap_images.cpp:253: error: (-5:Bad argument) CAP_IMAGES: can't find starting number (in the name of file): /nonexistent-cam in function 'icvExtractPattern'
+
+
+
+✅ Baseline locked from 5 lifts
+   📐 Avg max spine angle: 22.9°
+   ⏱️ Avg lift duration: 0.95s
+INFO:     127.0.0.1:34960 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34972 - "OPTIONS /api/sessions/3d56ce36-0416-46b4-a83f-e9381972d693/stop HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34976 - "POST /api/sessions/3d56ce36-0416-46b4-a83f-e9381972d693/stop HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34976 - "GET /api/health HTTP/1.1" 200 OK
