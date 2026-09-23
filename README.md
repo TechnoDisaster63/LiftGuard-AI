@@ -6,7 +6,24 @@ Point a camera at someone training. LiftGuard tracks the body, counts each rep, 
 
 > LiftGuard gives coaching feedback, not medical advice. Form-risk flags and the fatigue indicator are measured from 2D video. They don't diagnose anything and aren't an injury probability. Prevention here means catching risky form while the set is still happening, so it can be corrected.
 
-<!-- SCREENSHOTS -->
+<p align="center">
+  <img src="docs/images/dashboard.png" alt="LiftGuard home screen: pre-flight checks for movement mode, backend, camera, voice cues and face ID, with the last session's rep count" width="100%">
+</p>
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/sessions.png" alt="Saved sessions list with clean vs flagged reps, fatigue and length"></td>
+    <td width="33%"><img src="docs/images/register.png" alt="Register User: enter a name, then about six seconds in front of the webcam"></td>
+    <td width="33%"><img src="docs/images/settings.png" alt="Session defaults: movement mode, automatic camera, voice cues, pose model"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Every session saved, clean vs flagged at a glance</sub></td>
+    <td align="center"><sub>Face-ID registration from the browser camera</sub></td>
+    <td align="center"><sub>Set once: camera found automatically</sub></td>
+  </tr>
+</table>
+
+<sub>The screenshots were taken during development, so their session numbers come from test footage. A live-view capture will be added once there is a recorded side-view session to show.</sub>
 
 ## Start it
 
