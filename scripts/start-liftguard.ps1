@@ -21,8 +21,47 @@ $BackendPort  = if ($env:LIFTGUARD_BACKEND_PORT)  { $env:LIFTGUARD_BACKEND_PORT 
 $FrontendPort = if ($env:LIFTGUARD_FRONTEND_PORT) { $env:LIFTGUARD_FRONTEND_PORT } else { "3000" }
 New-Item -ItemType Directory -Force -Path $State | Out-Null
 
+$script:Step = "starting"
+$script:StartedAt = Get-Date
 function Say($msg)  { Write-Host "[liftguard] $msg" -ForegroundColor Cyan }
-function Fail($msg) { Write-Host "[liftguard] $msg" -ForegroundColor Red; exit 1 }
+
+function Get-Version($exe, [string[]]$exeArgs) {
+    try { return ((& $exe @exeArgs 2>&1) | Select-Object -First 1) } catch { return "not found" }
+}
+
+# On any failure: print one block the user can copy and send back, and save
+# the same text to .liftguard\diagnostics.txt.
+function Fail($msg) {
+    Write-Host ""
+    Write-Host "[liftguard] $msg" -ForegroundColor Red
+    $lines = @(
+        "LiftGuard start failed",
+        "Step:    $script:Step",
+        "Error:   $msg",
+        "Windows: $([System.Environment]::OSVersion.VersionString)",
+        "PowerShell: $($PSVersionTable.PSVersion)",
+        "py:      $(Get-Version 'py' @('-3.11', '--version'))",
+        "python:  $(Get-Version 'python' @('--version'))",
+        "node:    $(Get-Version 'node' @('--version'))",
+        "npm:     $(Get-Version 'npm.cmd' @('--version'))",
+        "Folder:  $Root"
+    )
+    foreach ($log in @("backend.err.log", "backend.log", "frontend.log", "frontend.err.log")) {
+        $path = Join-Path $State $log
+        # Only logs from this run; older ones would mislead.
+        if ((Test-Path $path) -and (Get-Item $path).LastWriteTime -ge $script:StartedAt) {
+            $tail = Get-Content $path -Tail 20 -ErrorAction SilentlyContinue
+            if ($tail) { $lines += "--- last lines of $log ---"; $lines += $tail }
+        }
+    }
+    $report = $lines -join [Environment]::NewLine
+    Set-Content -Path (Join-Path $State "diagnostics.txt") -Value $report -ErrorAction SilentlyContinue
+    Write-Host ""
+    Write-Host "==================== copy everything below and send it back ====================" -ForegroundColor Yellow
+    Write-Host $report
+    Write-Host "==================== (also saved to .liftguard\diagnostics.txt) ===============" -ForegroundColor Yellow
+    exit 1
+}
 
 function Test-Http($url) {
     try { Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3 | Out-Null; return $true }
@@ -96,10 +135,15 @@ function Wait-Http($url, $proc, $name, $seconds) {
     Fail "The $name didn't answer at $url within $seconds seconds. See .liftguard\$name.log."
 }
 
+trap { Fail "Unexpected error: $($_.Exception.Message)" }
+
+$script:Step = "1/4 installing backend packages"
 Install-Backend
+$script:Step = "2/4 installing dashboard packages"
 Install-Frontend
 
 # Backend
+$script:Step = "3/4 starting backend"
 $health = "http://127.0.0.1:$BackendPort/api/health"
 if (Test-Http $health) {
     Say "Backend already running on port $BackendPort"
@@ -111,6 +155,7 @@ if (Test-Http $health) {
 }
 
 # Frontend (the browser calls the backend directly on localhost)
+$script:Step = "4/4 starting dashboard"
 if (-not $env:NEXT_PUBLIC_API_BASE) { $env:NEXT_PUBLIC_API_BASE = "http://localhost:$BackendPort" }
 $app = "http://localhost:$FrontendPort"
 if (Test-Http "$app/") {
@@ -127,6 +172,7 @@ if (Test-Http "$app/") {
     }
 }
 
+$script:Step = "running"
 Say "LiftGuard is running at $app"
 if (-not $NoBrowser) { Start-Process $app }
 Write-Host ""

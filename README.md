@@ -10,13 +10,21 @@ Point a camera at someone training. LiftGuard tracks the body, counts each rep, 
 
 ## Start it
 
-**Windows:** install [Python 3.11](https://www.python.org/downloads/release/python-3119/) (tick "Add python.exe to PATH") and [Node.js 20 LTS](https://nodejs.org). Then double-click **`START-LIFTGUARD.bat`**.
+### Windows (one click)
 
-**Linux / macOS:** `./start.sh`
+1. Install [Python 3.11](https://www.python.org/downloads/release/python-3119/) (tick **"Add python.exe to PATH"**) and [Node.js 20 LTS](https://nodejs.org). This is only needed once.
+2. Double-click **`START-LIFTGUARD.bat`**.
 
-**GitHub Codespaces:** **Code → Codespaces → Create codespace on main**. The dashboard opens in a new tab once setup finishes. See [docs/CODESPACES.md](docs/CODESPACES.md).
+The first run sets everything up, which takes several minutes while it downloads the ML stack (MediaPipe, OpenCV, PyTorch). After that it starts in seconds. It starts the backend and the dashboard, waits until the backend reports healthy, and opens <http://localhost:3000>. To stop, press Enter in the LiftGuard window or double-click **`STOP-LIFTGUARD.bat`**.
 
-The launcher installs anything missing, starts the backend and the dashboard, waits until the backend reports healthy, and opens <http://localhost:3000>. The first run downloads the ML stack (MediaPipe, OpenCV, PyTorch), which takes a few minutes. After that it starts in seconds. To stop it, press Enter in the launcher window, or run **`STOP-LIFTGUARD.bat`** / `./stop.sh`. Logs are written to `.liftguard/`.
+If a step fails, the window says which step and why. It also prints one block between two yellow lines (saved to `.liftguard\diagnostics.txt`) with versions and log lines, ready to copy into an issue or message.
+
+### Linux, macOS and GitHub Codespaces
+
+- Linux / macOS: `./start.sh`, then `./stop.sh` to stop.
+- Codespaces: **Code → Codespaces → Create codespace on main**. The dashboard opens once setup finishes. See [docs/CODESPACES.md](docs/CODESPACES.md).
+
+Logs for every platform go to `.liftguard/`.
 
 ## What it does today
 
