@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { otherCameras, rememberCamera, startWithCamera } from "@/lib/camera";
 import { useLiveSession, type TelemetryPayload } from "@/lib/ws";
+import { openDeviceCamera, stopDeviceCamera, useFrameUplink } from "@/lib/deviceCamera";
 import { Alert, FLAG_CUE, Spinner } from "@/components/lg/ui";
 
 type StageState = "idle" | "counting" | "clean" | "flagged" | "fatigue";
@@ -62,7 +63,22 @@ function LiveInner() {
   const [error, setError] = useState<string | null>(null);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { frameUrl, telemetry, state, sendControl, requestControl, toasts, fatalError } = useLiveSession(sessionId);
+  const { frameUrl, telemetry, state, sendControl, sendFrame, requestControl, toasts, fatalError } = useLiveSession(sessionId);
+  // Set while a session analyses this device's camera (streamed from the
+  // browser) instead of a camera on the backend machine.
+  const [deviceStream, setDeviceStream] = useState<MediaStream | null>(null);
+  const deviceStreamRef = useRef<MediaStream | null>(null);
+  deviceStreamRef.current = deviceStream;
+  const deviceMode = deviceStream !== null;
+  useFrameUplink(deviceStream, sendFrame, state === "open");
+  // The session ended (stopped, lost, or never started): turn the camera light off.
+  useEffect(() => {
+    if (!sessionId && !starting && deviceStream) {
+      stopDeviceCamera(deviceStream);
+      setDeviceStream(null);
+    }
+  }, [sessionId, starting, deviceStream]);
+  useEffect(() => () => stopDeviceCamera(deviceStreamRef.current), []);
   // One-tap camera switch: cycle to the next camera that actually sends video.
   const [camStatus, setCamStatus] = useState<{ text: string; busy: boolean; tone?: "ok" | "warn" } | null>(null);
   const switchingRef = useRef(false);
@@ -107,6 +123,29 @@ function LiveInner() {
     } catch (e) {
       // The backend's message already says what went wrong and what to check.
       setError(e instanceof Error && /^(No camera found|Camera \d)/.test(e.message) ? e.message : `Couldn't start the session. ${e instanceof Error ? e.message : ""}`.trim());
+    } finally {
+      setStarting(false);
+      setTrying(null);
+    }
+  }, [starting, sessionId]);
+
+  const handleStartDevice = useCallback(async () => {
+    if (starting || sessionId) return;
+    setStarting(true);
+    setError(null);
+    setSavedSessionId(null);
+    let stream: MediaStream | null = null;
+    try {
+      setTrying("Asking for camera permission");
+      stream = await openDeviceCamera();
+      setTrying("Camera on · starting the analysis");
+      const res = await api.sessions.start({ camera_id: "browser" });
+      setDeviceStream(stream);
+      setSessionId(res.session_id);
+    } catch (e) {
+      stopDeviceCamera(stream);
+      const msg = e instanceof Error ? e.message : "";
+      setError(stream ? `Couldn't start the session. ${msg}`.trim() : msg);
     } finally {
       setStarting(false);
       setTrying(null);
@@ -223,11 +262,11 @@ function LiveInner() {
       else if (k === "m") sendControl("toggle_mirror");
       else if (k === "c") sendControl(manualCal ? "complete_calibration" : "start_calibration");
       else if (k === "r") sendControl("reset_reps");
-      else if (k === "k") void switchCamera();
+      else if (k === "k" && !deviceMode) void switchCamera();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal, switchCamera]);
+  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal, switchCamera, deviceMode]);
 
   // ---------------- READY (no session) ----------------
   if (!sessionId && !starting) {
@@ -243,6 +282,12 @@ function LiveInner() {
             <button className="lg-btn lg" onClick={handleStart}>
               Start session <kbd>Space</kbd>
             </button>
+            <button className="lg-btn" onClick={handleStartDevice}>
+              Use this device&apos;s camera
+            </button>
+          </div>
+          <div className="lg-m lg-faint mt-3" style={{ fontSize: 11, maxWidth: 560 }}>
+            Start session uses the camera on the LiftGuard computer. &ldquo;Use this device&apos;s camera&rdquo; streams the camera of the phone or laptop you&apos;re holding.
           </div>
         </div>
         <div className="flex flex-col gap-4">
@@ -321,8 +366,9 @@ function LiveInner() {
         <span className="lg-word">LIFTGUARD</span>
         <span className="lg-chip lg-m" style={glass}>
           <span className="lg-dot" style={{ background: connecting ? "var(--lg-faint)" : "#FF5A1F" }} />
-          {connecting ? "Connecting camera" : "Live · camera found"}
+          {connecting ? "Connecting camera" : deviceMode ? "Live · this device's camera" : "Live · camera found"}
         </span>
+        {!deviceMode && (
         <button
           className="lg-chip lg-m"
           style={{ ...glass, color: camStatus?.tone === "ok" ? "var(--lg-mint)" : camStatus?.tone === "warn" ? "var(--lg-amber)" : undefined }}
@@ -333,6 +379,7 @@ function LiveInner() {
           {camStatus?.busy && <Spinner />}
           {camStatus ? camStatus.text : "Switch camera"} {!camStatus && <span style={{ opacity: 0.6 }}>K</span>}
         </button>
+        )}
         <span className="lg-chip lg-m" style={glass}>
           Movement analysis · Squat mode
         </span>
@@ -442,7 +489,7 @@ function LiveInner() {
       </div>
 
       {menuOpen && sessionId && !stopping && (
-        <LiveMenu telemetry={telemetry} onAction={sendControl} onStop={handleStop} onClose={() => setMenuOpen(false)} />
+        <LiveMenu telemetry={telemetry} deviceMode={deviceMode} onAction={sendControl} onStop={handleStop} onClose={() => setMenuOpen(false)} />
       )}
 
       <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2" style={{ bottom: 110 }} aria-live="polite">
@@ -456,7 +503,7 @@ function LiveInner() {
   );
 }
 
-function LiveMenu({ telemetry, onAction, onStop, onClose }: { telemetry: TelemetryPayload | null; onAction: (a: string) => void; onStop: () => void; onClose: () => void }) {
+function LiveMenu({ telemetry, deviceMode, onAction, onStop, onClose }: { telemetry: TelemetryPayload | null; deviceMode: boolean; onAction: (a: string) => void; onStop: () => void; onClose: () => void }) {
   const laser = telemetry?.arduino_connected ?? false;
   const cam = Number(telemetry?.camera_id ?? 0);
   const every = telemetry?.process_every_n ?? 1;
@@ -492,6 +539,7 @@ function LiveMenu({ telemetry, onAction, onStop, onClose }: { telemetry: Telemet
             </span>
           </button>
         ))}
+        {!deviceMode && (
         <div className="lg-row flex items-center justify-between py-3 px-1">
           <span style={{ fontSize: 16 }}>Switch camera <span className="lg-m lg-faint" style={{ fontSize: 11 }}>advanced</span></span>
           <div className="lg-seg" role="radiogroup" aria-label="Camera">
@@ -502,6 +550,7 @@ function LiveMenu({ telemetry, onAction, onStop, onClose }: { telemetry: Telemet
             ))}
           </div>
         </div>
+        )}
         <button className="lg-btn warn w-full mt-4" onClick={onStop}>
           Stop and save <kbd>Space</kbd>
         </button>
