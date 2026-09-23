@@ -110,25 +110,26 @@ card("07_honesty", "Step 7 · Honest by design", [
     "Mobility / stretching clip:  0 reps  (correct - no squat to count)",
     "Pose visible in under 50% of frames:  refused, no report",
     "Gym edit with tight crops + equipment in the way:  refused",
-    ("Known limit, fix in progress: a one-leg knee-lift hold was", WARN),
-    ("counted as 1 squat. New rule: both knees bent + hip drop.", WARN),
+    ("Caught + fixed: a one-leg knee-lift hold once counted as a squat.", WARN),
+    ("A rep now needs both knees bent, hips dropping, feet planted.", WARN),
     ("Coaching indicators only - not medical advice.", DIM),
 ], "7 / 8  Honesty")
 
 term("08_tests", "Automated tests (CI on every pull request)", [
     "$ cd backend && pytest -q tests/test_video_analysis.py",
-    "...........                                              [100%]",
-    "11 passed",
+    "..................                                       [100%]",
+    "18 passed",
     "",
     "# covers: joint-angle math, deterministic rep counting,",
     "#         calibration, output files, low-pose refusal,",
-    "#         full-skeleton overlay",
+    "#         full-skeleton overlay, knee-lift + broad-jump",
+    "#         regressions (both-knees / hip-drop / feet-planted gates)",
 ], "8 / 8  Tests")
 
 card("09_roadmap", "What's shipped, what's next", [
     ("Shipped:  squat analysis on recorded video + dashboard", OK),
     "Next:  side-view clean / sloppy / tired squat validation",
-    "Next:  both-knees + hip-drop rep gate (being built now)",
+    "Done:  both-knees + hip-drop + feet-planted rep gates",
     "Roadmap:  lunges, step-ups, push-ups... (exercise catalog from",
     "                real workout footage, each needs its own rules + tests)",
     "Experiment:  small ML exercise classifier on pose landmarks",
