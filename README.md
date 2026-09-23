@@ -91,7 +91,7 @@ The live counter and the offline analyzer share one engine (`backend/app/video_a
 
 Squat is the first movement mode, not the last. The engine is built so a new mode brings three things: its own joint metrics, a rep definition with gates that reject look-alike movements, and form rules a coach would sign off on. Each one is checked against recorded clips before it ships. The same pipeline, calibration and report format then carry over unchanged.
 
-Push-up is next. Its engine is in place: elbow-angle rep counting, gates that reject standing arm bends and sliding hands, and flags for shallow reps, sagging or piking hips, depth drift and fast descent. So far it is tested only on synthetic skeletons, so the app lists it as "Coming" and it can't be picked until it has been checked on a recorded clip. The mode picker is already in Settings and on the Live screen. Lunge is built the same way (front-knee counting for stationary lunges, with flags for shallow depth, forward lean, knee past toes as a measured distance, depth drift and fast descent), also tested only on synthetic skeletons and not selectable yet. Jumping jacks follow the same path. [docs/MOVEMENT_MODES.md](docs/MOVEMENT_MODES.md) has the plan and the exercise-recognizer hook.
+Push-up is next. Its engine is in place: elbow-angle rep counting, gates that reject standing arm bends and sliding hands, and flags for shallow reps, sagging or piking hips, depth drift and fast descent. So far it is tested only on synthetic skeletons, so the app lists it as "Coming" and it can't be picked until it has been checked on a recorded clip. The mode picker is already in Settings and on the Live screen. Lunge is built the same way (front-knee counting for stationary lunges, with flags for shallow depth, forward lean, knee past toes as a measured distance, depth drift and fast descent), also tested only on synthetic skeletons and not selectable yet. Jumping jacks is built too (front view: arm-angle counting, gates for both arms together and feet jumping apart, flags for arms not overhead, feet not apart and tempo drift), also synthetic-only and not selectable yet. [docs/MOVEMENT_MODES.md](docs/MOVEMENT_MODES.md) has the plan and the exercise-recognizer hook.
 
 ## Development
 
@@ -103,7 +103,7 @@ cd backend && pip install -r requirements-dev.txt && pytest -q && ruff check app
 cd frontend && npm ci && npx tsc --noEmit && npm run build
 ```
 
-The backend suite has 134 tests. They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), each coaching flag firing on its fault and staying quiet on normal reps, report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
+The backend suite has 144 tests. They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), each coaching flag firing on its fault and staying quiet on normal reps, report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
 
 Manual start, if you'd rather not use the launcher:
 

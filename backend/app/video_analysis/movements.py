@@ -30,6 +30,11 @@ def _lunge():
     return LiveLungeCounter
 
 
+def _jacks():
+    from .jumping_jacks import LiveJacksCounter
+    return LiveJacksCounter
+
+
 MOVEMENT_MODES: dict[str, dict] = {
     "squat": {"label": "Squat", "noun": "squat", "source": "calibrated_squat_counter", "view": "side",
               "counter": _squat, "validated": True,
@@ -42,6 +47,10 @@ MOVEMENT_MODES: dict[str, dict] = {
               "counter": _lunge, "validated": False,
               "watches": "front knee depth, trunk lean, knee over toes, tempo",
               "pending": "Needs a check on a recorded side-view clip before it can be picked."},
+    "jumping_jacks": {"label": "Jumping jacks", "noun": "jumping jack", "source": "calibrated_jacks_counter",
+                      "view": "front", "counter": _jacks, "validated": False,
+                      "watches": "arms overhead, feet apart, tempo",
+                      "pending": "Needs a check on a recorded front-view clip before it can be picked."},
 }
 
 DEFAULT_MODE = "squat"
@@ -72,7 +81,7 @@ RECOGNIZER_LABELS: dict[str, str | None] = {
     "squats": "squat",
     "pushups": "pushup",
     "lunges": "lunge",
-    "jumping_jacks": None,
+    "jumping_jacks": "jumping_jacks",
     "situps": None,
     "bicep_curls": None,
     "tricep_extensions": None,

@@ -91,4 +91,7 @@ export const FLAG_CUE: Record<string, { cue: string; why: string }> = {
   SHALLOW_LUNGE: { cue: "Drop lower", why: "Front knee stayed above 110° at the bottom" },
   FORWARD_LEAN: { cue: "Chest up", why: "Trunk leaned past 30° for part of the lunge" },
   KNEE_PAST_TOES: { cue: "Longer stance", why: "Front knee travelled past the toes (measured distance)" },
+  ARMS_NOT_OVERHEAD: { cue: "Arms all the way up", why: "Arms stayed under 150° from the body" },
+  FEET_NOT_APART: { cue: "Jump wider", why: "Feet stayed under 1.8 hip widths apart" },
+  TEMPO_DRIFT: { cue: "Keep the rhythm", why: "This rep took 1.5x your usual time" },
 };

@@ -30,6 +30,9 @@ const FLAG_TEXT: Record<string, string> = {
   SHALLOW_LUNGE: "Last rep: shallow lunge",
   FORWARD_LEAN: "Last rep: forward lean",
   KNEE_PAST_TOES: "Last rep: knee past toes",
+  ARMS_NOT_OVERHEAD: "Last rep: arms not overhead",
+  FEET_NOT_APART: "Last rep: feet not apart",
+  TEMPO_DRIFT: "Last rep: slower than usual",
 };
 
 // Live cues and the last counted rep's form-risk flags are shown together so

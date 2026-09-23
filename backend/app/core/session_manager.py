@@ -69,6 +69,8 @@ def live_exercise_summary(engine) -> dict:
     }
     if mode == "pushup":
         summary["avg_deepest_elbow_angle_deg"] = avg("min_elbow_angle")
+    elif mode == "jumping_jacks":
+        summary["avg_max_arm_angle_deg"] = avg("max_arm_angle")
     else:
         summary["avg_deepest_knee_angle_deg"] = avg("min_knee_angle")
     summary.update({
