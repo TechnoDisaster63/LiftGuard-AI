@@ -36,7 +36,7 @@ export interface SessionReport {
   spine_history: number[];
   using_temporal: boolean;
   using_iri_v2: boolean;
-  camera_id: number;
+  camera_id: number | string;
   iri?: Record<string, unknown>;
   uncertainty?: Record<string, unknown>;
 }
