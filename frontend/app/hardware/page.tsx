@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Zap, ZapOff, Crosshair, Usb, Wifi, Cable } from "lucide-react";
-import clsx from "clsx";
+import Link from "next/link";
 import { api, ArduinoStatus } from "@/lib/api";
-import { Card, CardEyebrow } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Badge } from "@/components/ui/badge";
+import { Alert, Segmented, Spinner } from "@/components/lg/ui";
 
 export default function HardwarePage() {
   const [activeSessions, setActiveSessions] = useState<string[]>([]);
@@ -70,141 +65,91 @@ export default function HardwarePage() {
     setBusy(false);
   };
 
-  if (activeSessions.length === 0) {
-    return (
-      <Card>
-        <EmptyState
-          icon={<Cable size={22} strokeWidth={1.5} />}
-          message="No active sessions — the laser connects per live session."
-          actionLabel="Start one from Live Analysis"
-          actionHref="/live"
-        />
-      </Card>
-    );
-  }
-
+  const connected = !!status?.connected;
   return (
-    <div className="space-y-6 max-w-lg">
-      <Card className="p-4 flex items-center gap-3">
-        <CardEyebrow>Session</CardEyebrow>
-        <select
-          value={sessionId}
-          onChange={(e) => setSessionId(e.target.value)}
-          className="bg-panel-raised border border-border rounded-control px-3 py-1.5 text-sm text-ink font-mono focus:outline-none focus:border-brand/40"
-        >
-          {activeSessions.map((id) => (
-            <option key={id} value={id}>
-              {id.slice(0, 8)}…
-            </option>
-          ))}
-        </select>
-      </Card>
-
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-        <Card>
-          <div className="flex items-center gap-3 mb-6">
-            <div
-              className={clsx(
-                "w-11 h-11 rounded-control grid place-items-center shrink-0",
-                status?.connected ? "bg-brand/10 border border-brand/25" : "bg-panel-raised border border-border"
-              )}
+    <div className="lg-fade grid gap-10" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)" }}>
+      <div>
+        <div className="lg-m lg-dim">Laser pointer · Arduino or ESP32 pan-tilt</div>
+        <div className="lg-d mt-1.5" style={{ fontSize: 120, color: activeSessions.length === 0 ? "var(--lg-faint)" : connected ? "var(--lg-mint)" : "var(--lg-ink)" }}>
+          {activeSessions.length === 0 ? "No session" : connected ? "Connected" : "Not connected"}
+        </div>
+        <p className="lg-dim mt-4" style={{ fontSize: 16, maxWidth: 520, lineHeight: 1.45 }}>
+          {activeSessions.length === 0
+            ? "The laser connects per live session. Start a session, then come back here to connect it."
+            : connected
+              ? `Talking to the laser on ${status?.port ?? "an unknown port"} over ${status?.transport.toUpperCase()}.`
+              : "Plug the Arduino in over USB, or point this at an ESP32 on the same WiFi."}
+        </p>
+        {activeSessions.length === 0 && (
+          <Link href="/live" className="lg-btn lg mt-6">
+            Go to Live
+          </Link>
+        )}
+        <p className="lg-faint mt-10" style={{ fontSize: 13, maxWidth: 520 }}>
+          WiFi mode talks to an ESP32 running firmware/liftguard_wifi_laser/, with the same pan, tilt and laser commands as the USB Arduino.
+        </p>
+      </div>
+      {activeSessions.length > 0 && (
+        <div>
+          <div className="lg-row flex items-center justify-between py-5">
+            <div className="lg-d" style={{ fontSize: 42 }}>
+              Session
+            </div>
+            <select
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              aria-label="Session"
+              className="lg-m"
+              style={{ background: "var(--lg-p2)", color: "var(--lg-ink)", border: "none", borderRadius: 10, padding: "10px 12px" }}
             >
-              {status?.connected ? (
-                <Zap size={20} className="text-brand" />
-              ) : (
-                <ZapOff size={20} className="text-ink-faint" />
-              )}
-            </div>
-            <div className="flex-1">
-              <p className="font-display text-lg">
-                {status?.connected ? "Laser Connected" : "Laser Disconnected"}
-              </p>
-              <p className="text-[11px] font-mono text-ink-faint">
-                {status?.connected ? status.port : "no active connection"}
-              </p>
-            </div>
-            {status?.connected && (
-              <Badge tone="brand">{status.transport.toUpperCase()}</Badge>
-            )}
+              {activeSessions.map((id) => (
+                <option key={id} value={id}>
+                  {id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
           </div>
-
-          {!status?.connected && (
+          {!connected && (
             <>
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setTransport("usb")}
-                  className={clsx(
-                    "press-scale flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-control border text-sm transition-colors",
-                    transport === "usb"
-                      ? "border-brand/40 bg-brand/10 text-brand"
-                      : "border-border text-ink-muted hover:text-ink"
-                  )}
-                >
-                  <Usb size={15} /> USB
-                </button>
-                <button
-                  onClick={() => setTransport("wifi")}
-                  className={clsx(
-                    "press-scale flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-control border text-sm transition-colors",
-                    transport === "wifi"
-                      ? "border-brand/40 bg-brand/10 text-brand"
-                      : "border-border text-ink-muted hover:text-ink"
-                  )}
-                >
-                  <Wifi size={15} /> WiFi
-                </button>
+              <div className="lg-row flex items-center justify-between py-5">
+                <div>
+                  <div className="lg-d" style={{ fontSize: 42 }}>
+                    Connection
+                  </div>
+                  <div className="lg-dim mt-1.5" style={{ fontSize: 14 }}>
+                    {transport === "usb" ? "Finds the Arduino's port automatically." : "ESP32 IP address or hostname."}
+                  </div>
+                </div>
+                <Segmented label="Connection" options={["USB", "WiFi"]} value={transport === "usb" ? 0 : 1} onChange={(i) => setTransport(i === 0 ? "usb" : "wifi")} />
               </div>
-
-              {transport === "usb" ? (
-                <p className="text-xs text-ink-faint mb-4">
-                  Auto-detects the Arduino&apos;s COM port — same as the desktop app.
-                </p>
-              ) : (
+              {transport === "wifi" && (
                 <input
                   value={host}
                   onChange={(e) => setHost(e.target.value)}
                   placeholder="192.168.1.42 or liftguard-laser.local"
-                  className="w-full mb-4 bg-panel-raised border border-border rounded-control px-3 py-2 text-sm text-ink placeholder:text-ink-faint font-mono focus:outline-none focus:border-brand/40"
+                  aria-label="ESP32 address"
+                  className="lg-input lg-m mb-4"
+                  style={{ fontSize: 16, textTransform: "none", letterSpacing: 0 }}
                 />
-              )}
-
-              {error && (
-                <div className="rounded-control border border-risk-high/30 bg-risk-high/5 px-3 py-2 text-xs text-risk-high mb-4">
-                  {error}
-                </div>
               )}
             </>
           )}
-
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              onClick={status?.connected ? disconnect : connect}
-              disabled={busy}
-              className="flex-1 justify-center"
-            >
-              {status?.connected ? "Disconnect" : `Connect via ${transport.toUpperCase()}`}
-            </Button>
-            <Button
-              variant="outline-brand"
-              onClick={calibrate}
-              disabled={busy || !status?.connected}
-              className="flex-1 justify-center"
-            >
-              <Crosshair size={15} /> Calibrate
-            </Button>
+          {error && (
+            <div className="my-4">
+              <Alert>{error}</Alert>
+            </div>
+          )}
+          <div className="flex gap-3 mt-6">
+            <button className="lg-btn lg" onClick={connected ? disconnect : connect} disabled={busy}>
+              {busy ? <Spinner /> : null}
+              {connected ? "Disconnect" : `Connect over ${transport === "usb" ? "USB" : "WiFi"}`}
+            </button>
+            <button className="lg-btn g lg" onClick={calibrate} disabled={busy || !connected} title={connected ? "Re-centre the pan-tilt" : "Connect the laser first"}>
+              Calibrate
+            </button>
           </div>
-        </Card>
-      </motion.div>
-
-      <Card>
-        <p className="text-xs text-ink-faint">
-          WiFi mode talks to an ESP32 running the firmware in{" "}
-          <code className="font-mono">firmware/liftguard_wifi_laser/</code> — same pan/tilt/
-          laser command protocol as the USB Arduino, just delivered over HTTP instead of a
-          serial port.
-        </p>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }
