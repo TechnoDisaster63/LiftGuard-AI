@@ -24,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "LiftGuard AI",
-  description: "Real-time biomechanical injury-risk monitoring",
+  description: "Real-time pose tracking and squat rep counting",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -70,7 +70,7 @@ export default function DashboardPage() {
             transition={{ delay: 0.08 }}
             className="text-sm text-ink-muted mt-2"
           >
-            Real-time biomechanical injury-risk monitoring
+            Real-time pose tracking and squat rep counting
           </motion.p>
         </div>
       </div>
