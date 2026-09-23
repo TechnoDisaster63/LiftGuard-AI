@@ -9,8 +9,41 @@ liftguard_engine.py for the reference implementation this is built from.
 """
 
 
+# Live-screen fields backed by models that are not validated for this demo
+# (TCN / risk classifier confidence and uncertainty, injury risk index).
+# docs/REVIVAL_SCOPE.md puts TCN claims and injury probabilities out of scope,
+# so the live telemetry sends None for them unless validated_claims_only is
+# turned off for development.
+UNVALIDATED_TELEMETRY_OFF = {
+    "risk_label": None,
+    "risk_level": None,
+    "confidence": None,
+    "uncertainty": None,
+    "uncertainty_category": None,
+    "risk_mode": None,
+    "injury_risk": None,
+    "injury_acute": None,
+    "injury_cumulative": None,
+    "injury_category": None,
+    "injury_ci_text": None,
+    "using_iri_v2": False,
+    "using_temporal": False,
+}
+
+
+def live_fatigue_indicator(engine) -> dict:
+    from ..video_analysis.analyzer import AnalysisConfig, _fatigue
+
+    feed = getattr(engine, "live_squat", None)
+    counter = getattr(feed, "counter", None)
+    reps = counter.machine.reps if counter is not None else []
+    return _fatigue(reps, AnalysisConfig().baseline_reps)
+
+
 class SessionManager:
     """One SessionManager instance = one live camera session."""
+
+    validated_claims_only = True
 
     def __init__(self, voice_enabled=True, arduino_enabled=True,
                  model_complexity=0, process_every_n=1, use_temporal=True):
@@ -133,12 +166,14 @@ class SessionManager:
         features = e.current_features or {}
         user = getattr(e, "current_user", None)
 
+        fatigue_indicator = live_fatigue_indicator(e)
+
         fps = None
         if e.frame_times:
             import numpy as _np
             fps = round(1.0 / (float(_np.mean(e.frame_times)) + 1e-6), 1)
 
-        return {
+        telemetry = {
             # Risk panel
             "risk_label": risk.get("risk_label"),
             "risk_level": risk.get("risk_level"),
@@ -188,6 +223,21 @@ class SessionManager:
             "fps": fps,
             "frame_count": e.frame_count,
         }
+        # Fatigue indicator from the counted reps (same rule as the offline
+        # report): 0-100, higher = more drift in rep duration, depth and trunk
+        # lean versus the first reps. None until there are enough reps.
+        # The legacy fatigue_engine score (100 = fresh) read as "100% fatigue"
+        # from the first frame on the dashboard.
+        telemetry["fatigue_indicator"] = fatigue_indicator
+        telemetry["fatigue_score"] = (
+            fatigue_indicator["score"] if fatigue_indicator["status"] != "INSUFFICIENT_REPS" else None
+        )
+        telemetry["fatigue_alert"] = fatigue_indicator["status"]
+        telemetry["lifts_completed"] = e.current_exercise_status.get("rep_count", 0)
+        if self.validated_claims_only:
+            telemetry.update(UNVALIDATED_TELEMETRY_OFF)
+        telemetry["validated_claims_only"] = self.validated_claims_only
+        return telemetry
 
     # ── Controls (mirrors the keyboard shortcuts in run()) ────
     def handle_control(self, action: str) -> str:

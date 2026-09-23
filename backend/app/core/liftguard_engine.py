@@ -120,6 +120,22 @@ except ImportError:
 # ── Calibrated squat counter (shared with offline analysis) ──
 from ..video_analysis.live import LiveSquatFeed
 
+
+def shoulder_tilt_deg(landmarks_px, min_width_ratio=0.35):
+    """Angle of the shoulder line from horizontal, in degrees.
+
+    ``landmarks_px`` are MediaPipe landmarks in pixels (x*w, y*h, ...).
+    Returns None when the shoulders are too close together horizontally to
+    measure (side view): shoulder width under ``min_width_ratio`` of torso
+    height.
+    """
+    ls, rs, lh, rh = landmarks_px[11], landmarks_px[12], landmarks_px[23], landmarks_px[24]
+    dx, dy = abs(ls[0] - rs[0]), abs(ls[1] - rs[1])
+    torso = abs((ls[1] + rs[1]) / 2 - (lh[1] + rh[1]) / 2)
+    if torso <= 0 or dx < min_width_ratio * torso:
+        return None
+    return float(np.degrees(np.arctan2(dy, dx)))
+
 # ── Arduino Controller ───────────────────────────────────────
 ARDUINO_AVAILABLE = False
 try:
@@ -247,6 +263,7 @@ class SimpleSpeaker:
  
 class FormCorrector:
     """Generates prioritised corrections from biomechanical features."""
+    LATERAL_TILT_DEG = 10.0
  
     def __init__(self):
         self.last_corrections = {}
@@ -334,7 +351,18 @@ class FormCorrector:
                 'display': "Push knees outward!",
                 'body_part': 'LEFT_KNEE'
             })
-        if lat_tilt > 0.3:
+        # Shoulder-line tilt in degrees, measured in pixels with the frame's
+        # aspect ratio (set by LiftGuardAI.process_frame). The old
+        # spine_lateral_tilt feature is raw pixels / 100, so ~30 px of
+        # shoulder height difference at 720p fired this correction for a
+        # centered lifter. When shoulders overlap (side view) the tilt is
+        # not measurable and shoulder_tilt_deg is None.
+        if 'shoulder_tilt_deg' in features:
+            tilt_deg = features['shoulder_tilt_deg']
+            leaning = tilt_deg is not None and tilt_deg > self.LATERAL_TILT_DEG
+        else:
+            leaning = lat_tilt > 0.3
+        if leaning:
             corrections.append({
                 'id': 'lateral_lean', 'priority': 2,
                 'command': "You're leaning to one side! Center yourself!",
@@ -1073,6 +1101,10 @@ class LiftGuardAI:
                             )
                     )
  
+                    self.current_features['shoulder_tilt_deg'] = shoulder_tilt_deg(
+                        self.cached_landmarks
+                    )
+
                     if self.calibration_mode:
                         self._collect_calibration()
                     else:
