@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { startWithCamera } from "@/lib/camera";
 import { useLiveSession, type TelemetryPayload } from "@/lib/ws";
 import { Alert, FLAG_CUE, Spinner } from "@/components/lg/ui";
 
@@ -55,6 +56,7 @@ function LiveInner() {
   const params = useSearchParams();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [trying, setTrying] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
@@ -67,13 +69,17 @@ function LiveInner() {
     setError(null);
     setSavedSessionId(null);
     try {
-      const res = await api.sessions.start({});
-      setSessionId(res.session_id);
+      // Zero choices: find the camera that actually sends video.
+      const res = await startWithCamera((_index, attempt, total) =>
+        setTrying(attempt === 1 ? "Looking for your camera" : `Looking for your camera · try ${attempt} of ${total}`)
+      );
+      setSessionId(res.sessionId);
     } catch (e) {
       // The backend's message already says what went wrong and what to check.
       setError(`Couldn't start the session. ${e instanceof Error ? e.message : ""}`.trim());
     } finally {
       setStarting(false);
+      setTrying(null);
     }
   }, [starting, sessionId]);
 
@@ -284,7 +290,7 @@ function LiveInner() {
         <span className="lg-word">LIFTGUARD</span>
         <span className="lg-chip lg-m" style={glass}>
           <span className="lg-dot" style={{ background: connecting ? "var(--lg-faint)" : "#FF5A1F" }} />
-          Live · cam {telemetry?.camera_id ?? 0}
+          {connecting ? "Connecting camera" : "Live · camera found"}
         </span>
         <span className="lg-chip lg-m" style={glass}>
           Movement analysis · Squat mode
@@ -304,7 +310,7 @@ function LiveInner() {
         <div className="lg-d lg-stage-idle flex flex-col items-end gap-6">
           <span>{stopping ? "Saving" : "Starting"}</span>
           <span className="lg-m flex items-center gap-2.5" style={{ fontSize: 12, color: "rgba(244,243,238,.7)", fontStretch: "normal" }}>
-            <Spinner /> {stopping ? "Writing the session report" : "Opening the camera and pose model"}
+            <Spinner /> {stopping ? "Writing the session report" : starting ? trying ?? "Looking for your camera" : "Camera found · loading the pose model"}
           </span>
         </div>
       ) : stage === "idle" ? (
@@ -446,7 +452,7 @@ function LiveMenu({ telemetry, onAction, onStop, onClose }: { telemetry: Telemet
           </button>
         ))}
         <div className="lg-row flex items-center justify-between py-3 px-1">
-          <span style={{ fontSize: 16 }}>Camera</span>
+          <span style={{ fontSize: 16 }}>Switch camera <span className="lg-m lg-faint" style={{ fontSize: 11 }}>advanced</span></span>
           <div className="lg-seg" role="radiogroup" aria-label="Camera">
             {[0, 1, 2, 3].map((i) => (
               <button key={i} role="radio" aria-checked={cam === i} onClick={() => cam !== i && onAction(`switch_camera:${i}`)}>

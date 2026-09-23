@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { API_BASE, api, SessionDefaults } from "@/lib/api";
 import { Alert, Segmented, Spinner, Switch } from "@/components/lg/ui";
 import { useBackendOnline } from "@/components/layout/TopNav";
+import { CAMERA_CANDIDATES, getCameraPin, getLastCamera, setCameraPin } from "@/lib/camera";
 
 export default function SettingsPage() {
   const online = useBackendOnline();
@@ -37,7 +38,7 @@ export default function SettingsPage() {
   const rows: [string, string, React.ReactNode][] = defaults
     ? [
         ["Movement mode", "Squat is the mode available today. More movements plug in here.", <Segmented key="m" label="Movement mode" options={["Squat"]} value={0} onChange={() => {}} />],
-        ["Camera", "USB index. 0 is usually the built-in webcam.", <Segmented key="c" label="Default camera" options={["0", "1", "2", "3", "4"]} value={defaults.camera_id} onChange={(i) => patch({ camera_id: i })} />],
+        ["Camera", "Found automatically at start: LiftGuard uses the first camera that sends video.", <CameraSetting key="c" />],
         ["Voice cues", "Spoken feedback during the session.", <Switch key="v" label="Voice cues" checked={defaults.voice_enabled} onChange={(v) => patch({ voice_enabled: v })} />],
         ["Laser pointer", "Arduino pan-tilt laser, if one is plugged in.", <Switch key="l" label="Laser pointer" checked={defaults.arduino_enabled} onChange={(v) => patch({ arduino_enabled: v })} />],
         ["Pose model", "Lite is fastest. Heavy is most accurate.", <Segmented key="p" label="Pose model" options={["Lite", "Full", "Heavy"]} value={defaults.model_complexity} onChange={(i) => patch({ model_complexity: i })} />],
@@ -97,6 +98,44 @@ export default function SettingsPage() {
               </div>
             ))}
       </div>
+    </div>
+  );
+}
+
+/** Automatic by default. Picking an index is an advanced fallback, kept out of the way. */
+function CameraSetting() {
+  const [pin, setPin] = useState<number | null>(null);
+  const [last, setLast] = useState<number | null>(null);
+  const [advanced, setAdvanced] = useState(false);
+  useEffect(() => {
+    const p = getCameraPin();
+    setPin(p);
+    setLast(getLastCamera());
+    setAdvanced(p !== null);
+  }, []);
+  const choose = (p: number | null) => {
+    setCameraPin(p);
+    setPin(p);
+  };
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <div className="lg-m" style={{ color: pin === null ? "var(--lg-mint)" : "var(--lg-amber)" }}>
+        {pin === null ? (last !== null ? `Automatic · last found camera ${last}` : "Automatic") : `Fixed to camera ${pin}`}
+      </div>
+      {advanced ? (
+        <div className="flex items-center gap-3">
+          <Segmented
+            label="Camera"
+            options={["Auto", ...CAMERA_CANDIDATES.map(String)]}
+            value={pin === null ? 0 : CAMERA_CANDIDATES.indexOf(pin) + 1}
+            onChange={(i) => choose(i === 0 ? null : CAMERA_CANDIDATES[i - 1])}
+          />
+        </div>
+      ) : (
+        <button className="lg-m lg-faint underline" style={{ fontSize: 11 }} onClick={() => setAdvanced(true)}>
+          Advanced: pick a camera by number
+        </button>
+      )}
     </div>
   );
 }
