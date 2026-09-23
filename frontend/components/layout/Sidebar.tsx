@@ -79,7 +79,7 @@ export function Sidebar() {
 
       <div className="px-3 pt-4 border-t border-border">
         <p className="text-[10px] text-ink-faint font-mono">
-          IRI is not a medical diagnosis
+          Not a medical diagnosis
         </p>
       </div>
     </aside>

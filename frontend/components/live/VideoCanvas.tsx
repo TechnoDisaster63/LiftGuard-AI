@@ -6,6 +6,12 @@ import { VideoHUD } from "./VideoHUD";
 import { SparklesCore } from "@/components/ui/sparkles";
 import type { TelemetryPayload } from "@/lib/ws";
 
+// Engine cue text can start with an emoji (e.g. "\u2705 Great!") that the UI
+// fonts can't render, which shows up as a missing-glyph box. Drop pictographs.
+function stripEmoji(text: string): string {
+  return text.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "").trim();
+}
+
 interface VideoCanvasProps {
   frameUrl: string | null;
   connectionState: "idle" | "connecting" | "open" | "closed" | "error";
@@ -84,12 +90,12 @@ export function VideoCanvas({ frameUrl, connectionState, telemetry }: VideoCanva
 
       {telemetry?.feedback_message && frameUrl && (
         <div className="absolute bottom-20 left-4 right-4 glass-panel rounded-control px-4 py-2">
-          <p className="text-sm text-ink font-body">{telemetry.feedback_message}</p>
+          <p className="text-sm text-ink font-body">{stripEmoji(telemetry.feedback_message)}</p>
         </div>
       )}
 
-      {/* Connection indicator — small and out of the way of the identity/badge chips */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+      {/* Connection indicator: below the identity chip so the badge row can't cover it */}
+      <div className="absolute top-[4.5rem] left-4 glass-panel rounded-control px-2 py-1 flex items-center gap-1.5">
         <span
           className={`w-1.5 h-1.5 rounded-full ${
             connectionState === "open" ? "bg-brand animate-pulse-ring" : "bg-ink-faint"
