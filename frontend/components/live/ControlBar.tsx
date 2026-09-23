@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Mic, MicOff, Zap, ZapOff, FlipHorizontal2, RotateCcw, Download,
-  Crosshair, Cpu, Save, Gauge, Wifi, Video, ChevronDown,
+  Crosshair, Save, Gauge, Wifi, Video, ChevronDown,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -96,12 +96,6 @@ export function ControlBar({
           onClick={() => onAction("toggle_mirror")}
           icon={<FlipHorizontal2 size={16} />}
           label="MIRROR"
-        />
-        <DeckButton
-          active={usingTemporal}
-          onClick={() => onAction("toggle_temporal")}
-          icon={<Cpu size={16} />}
-          label={usingTemporal ? "TCN" : "FRAME"}
         />
         <DeckButton
           active={calibrationMode}

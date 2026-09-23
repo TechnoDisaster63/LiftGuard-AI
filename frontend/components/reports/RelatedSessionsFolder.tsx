@@ -11,7 +11,8 @@ function initialsOf(name: string) {
 
 function PaperContent({ item, onOpen }: { item: SessionHistoryItem; onOpen: () => void }) {
   const riskColor =
-    item.peak_risk >= 3 ? "#FF1F5C" : item.peak_risk === 2 ? "#EF4444" : item.peak_risk === 1 ? "#F5A524" : "#16D97B";
+    // Neutral: the stored peak risk comes from an unvalidated risk classifier.
+    "#8A93A6";
 
   return (
     <button

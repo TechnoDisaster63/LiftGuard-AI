@@ -95,17 +95,10 @@ function ReportContent() {
       </motion.div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Peak Risk Level" value={report.peak_risk} accent="red" />
-        <StatCard label="Model" value={report.using_temporal ? "TCN" : "Frame-level"} />
-        <StatCard label="IRI Version" value={report.using_iri_v2 ? "V2" : "Legacy"} />
         <StatCard label="Camera" value={`#${report.camera_id}`} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <p className="font-display text-base mb-3">Injury Risk Index</p>
-          <TimelineChart data={report.iri_history ?? []} color="#EF4444" />
-        </Card>
+      <div className="grid grid-cols-1 gap-6">
         <Card className="p-5">
           <p className="font-display text-base mb-3">Spine Flexion</p>
           <TimelineChart data={report.spine_history ?? []} color="#16D97B" unit="°" />

@@ -7,7 +7,7 @@ import { Square, FileText, ListVideo, History } from "lucide-react";
 import { api, SessionHistoryItem } from "@/lib/api";
 import { Card, CardEyebrow } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge, riskToneFromLevel } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RecentReportsFolder } from "@/components/dashboard/RecentReportsFolder";
 
@@ -114,7 +114,6 @@ export default function SessionsPage() {
                       {h.started_at ? new Date(h.started_at).toLocaleString() : "—"}
                     </p>
                   </div>
-                  <Badge tone={riskToneFromLevel(h.peak_risk)}>Peak Risk {h.peak_risk}</Badge>
                 </motion.div>
               </Link>
             ))}
