@@ -15,6 +15,21 @@ These outputs are coaching indicators. They are **not medical advice, a diagnosi
 - Every successful run writes `annotated.mp4`, `report.json`, and `reps.csv`.
 - CI covers angle calculations, deterministic rep analysis, output creation, and low-pose failure.
 
+## Rep counting: per-session threshold calibration
+
+People squat to different depths, and camera angle changes how deep a knee angle looks. A fixed rule ("bottom at 105 deg or less, standing at 155 deg or more") undercounted honest reps on a front-view clip, where bottoms showed as 110-125 deg.
+
+Each video now sets its own thresholds from its knee-angle distribution (`calibrate_thresholds` in `backend/app/video_analysis/analyzer.py`):
+
+- Upright level = 90th percentile knee angle. Deep level = 5th percentile. Observed range = upright - deep.
+- If the observed range is under 35 deg, the video has no squat motion: **0 reps**, with the message "No squat movement detected ...". Thresholds are never shrunk until something counts.
+- Bottom threshold = deep level + 35% of range, clamped to 70-140 deg. Standing threshold = upright level - 25% of range, clamped to 140-175 deg. They are kept at least 25 deg apart (hysteresis).
+- Each counted rep must itself cover at least half the observed range (30 deg minimum), so partial pulses and bobbing are not counted as squats.
+- A ~0.2 s running median removes single-frame pose glitches before counting; per-rep depth and range use the raw angles.
+- The chosen thresholds and reason are written to `report.json` under `calibration` and shown on the annotated video.
+
+This is calibration to the lifter, not loosening to force a count. Pose coverage under 50% still refuses to produce a report. `AnalysisConfig(calibrate=False)` restores the fixed rule; the golden fixture gives the same summary either way.
+
 ## Explicitly out of scope for this challenge demo
 
 Arduino/laser feedback, face recognition, live multi-user streaming, clinical claims, injury probabilities, TCN/MC-dropout claims, multiple exercises, cloud deployment, and mobile apps. Existing modules remain experimental and are not evidence for this demo.
