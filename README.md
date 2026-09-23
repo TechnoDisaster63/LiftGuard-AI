@@ -1,167 +1,113 @@
-# LiftGuard AI
+# LiftGuard
 
-Real-time lifting injury-risk analysis: MediaPipe pose tracking, ML risk
-classification (TCN + MC-Dropout uncertainty + IRI v2), fatigue tracking,
-and a pan-tilt laser that points at the body part that needs correcting.
-FastAPI backend, Next.js dashboard, ESP32/Arduino laser firmware.
+**Real-time movement analysis and injury prevention platform. Squat is the first movement mode.**
 
-**Status: implemented, validation pending.** The backend, frontend, and
-firmware are complete and pass CI (type-check, production build, unit
-tests, lint, byte-compile). Real camera, Arduino, ESP32, and laser behavior
-still need an on-hardware verification pass before gym use. See
-`SECURITY.md` before exposing the backend to any network.
+Point a camera at someone training. LiftGuard tracks the body, counts each rep, and flags the form patterns that coaches correct: shallow depth, too much forward lean, a cut-short range of motion. As the set goes on, it watches how each rep compares with the first ones and shows a fatigue indicator. It runs on one laptop, offline, with a browser dashboard.
 
-See `LiftGuard_AI_Architecture.md` for the architecture and
-`DOCUMENTATION.md` for the full component-by-component writeup.
+> LiftGuard gives coaching feedback, not medical advice. Form-risk flags and the fatigue indicator are measured from 2D video. They don't diagnose anything and aren't an injury probability. Prevention here means catching risky form while the set is still happening, so it can be corrected.
 
-- `backend/` - FastAPI wrapper around the original AI pipeline. See `backend/README.md`.
-- `frontend/` - Next.js dashboard. See `frontend/README.md`.
-- `firmware/` - ESP32 sketch for WiFi laser transport (alternative to USB Arduino). See `firmware/README.md`.
-- `shared/` - notes on the types decision. See `shared/types/README.md`.
+<!-- SCREENSHOTS -->
 
-## Hardware architecture
+## Start it
+
+**Windows:** install [Python 3.11](https://www.python.org/downloads/release/python-3119/) (tick "Add python.exe to PATH") and [Node.js 20 LTS](https://nodejs.org). Then double-click **`START-LIFTGUARD.bat`**.
+
+**Linux / macOS:** `./start.sh`
+
+**GitHub Codespaces:** **Code → Codespaces → Create codespace on main**. The dashboard opens in a new tab once setup finishes. See [docs/CODESPACES.md](docs/CODESPACES.md).
+
+The launcher installs anything missing, starts the backend and the dashboard, waits until the backend reports healthy, and opens <http://localhost:3000>. The first run downloads the ML stack (MediaPipe, OpenCV, PyTorch), which takes a few minutes. After that it starts in seconds. To stop it, press Enter in the launcher window, or run **`STOP-LIFTGUARD.bat`** / `./stop.sh`. Logs are written to `.liftguard/`.
+
+## What it does today
+
+| | |
+|---|---|
+| **Rep counting** | Counts squats live from a webcam or a video file. There are no fixed thresholds: each session calibrates to the person's own depth and the camera angle from the last 30 seconds of movement. |
+| **Rejecting reps that aren't squats** | A counted rep has to keep the feet planted, lower the hips and bend both knees, so knee lifts, jump dips and bobbing don't count. Rejected attempts are reported with the reason. |
+| **Form-risk flags** | Each rep can be flagged `LIMITED_DEPTH` (knee angle stays above 110°), `EXCESSIVE_TRUNK_LEAN` (trunk above 45°) or `LOW_RANGE_OF_MOTION` (under 45° of movement). The rules are simple on purpose, so every flag can be explained. |
+| **Fatigue indicator** | A 0-100 score for how far rep time, depth and trunk lean drift from the first reps. It stays blank until there are enough reps to compare. |
+| **Voice cues** | Optional spoken corrections through the laptop's speech engine. Cues have cooldowns so it doesn't talk over the lifter. |
+| **Face-ID registration** | Register a lifter from the browser's camera in about six seconds. Sessions then start under their name, and anyone else trains as Guest. Uses OpenCV face recognition and stays on the machine. |
+| **Camera auto-detect** | Press Start and LiftGuard uses the first camera that actually sends video. Clear messages when the camera is missing, busy in another app or blocked by Windows privacy settings. |
+| **Session reports** | Stopping a session saves it. Each report has reps, flags, depth, rep timing and the fatigue trend. |
+| **Offline video analysis** | `python backend/analyze_video.py clip.mp4` turns a recorded side-view squat into an annotated MP4, a per-rep CSV and a JSON report. The same input always gives the same result. |
+
+## How it works
 
 ```
-Camera (USB or WiFi/IP)  --->  Laptop (FastAPI backend + AI pipeline)  --->  Laser pointer (USB Arduino OR WiFi ESP32, picked at connect time)
-                                        |
-                                        v
-                          Web dashboard (any browser, any device)
+Camera or video file
+      │
+      ▼
+MediaPipe pose ──► joint angles (knee, hip, trunk) ──► rep state machine
+                                                      │  per-session calibration
+                                                      │  leg gates (feet, hips, both knees)
+                                                      ▼
+                                         reps · form-risk flags · fatigue indicator
+                                                      │
+            FastAPI backend (REST + WebSocket) ◄──────┘
+                      │
+                      ▼
+            Next.js dashboard in any browser
 ```
 
-No dedicated secondary display device - the web dashboard (phone, tablet,
-another laptop, anything with a browser on the network) replaces that role.
+The live counter and the offline analyzer share one engine (`backend/app/video_analysis/`), so a clip gives the same reps whether it's streamed or analysed as a file. [docs/REVIVAL_SCOPE.md](docs/REVIVAL_SCOPE.md) explains how the thresholds are chosen, what each gate checks and what was measured on the development clips.
 
-## Quickstart
+## Limits, stated plainly
 
-```bash
-# Terminal 1
-cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
+- **Squat only.** Other movements aren't recognised yet. The screen says "Detecting squat..." until the first real rep.
+- **2D angles.** Joint angles are measured in the image plane, not in 3D. A side view works best. Keep the whole body in frame, in one continuous shot: a camera cut or zoom can fake or hide a rep.
+- **Not validated as a medical or biomechanical tool.** The thresholds were checked on development clips and synthetic tests, not in a clinical study.
+- **Experimental, off by default:** the pan-tilt laser (Arduino / ESP32) and the older TCN risk model. No trained weights ship for the model, so the dashboard shows none of its output.
+- **Face recognition** is OpenCV's LBPH recogniser. Fine for telling apart a few registered lifters on one machine. Not an identity or security check.
+- **One camera session at a time** per backend.
 
-# Terminal 2
-cd frontend && npm ci && npm run dev
-```
+## Where it's going
 
-Then open http://localhost:3000 - it redirects to the dashboard.
-
-## Security
-
-When `LIFTGUARD_API_KEY` is set on the backend, set the same value as `NEXT_PUBLIC_LIFTGUARD_API_KEY` in `frontend/.env.local`. The dashboard sends it with REST requests and WebSocket handshakes. Because `NEXT_PUBLIC_*` values are embedded in browser code, deploy the dashboard only as a trusted operator UI and never publish a build containing a production key.
-
-
-The backend can read user data, enroll face profiles, and drive a physical
-laser, so it ships with an opt-in API key and an ESP32 host allowlist:
-
-- Set `LIFTGUARD_API_KEY` and clients must send `Authorization: Bearer <key>`
-  (the dashboard passes `?token=<key>` on the WebSocket). Empty means open
-  development mode - localhost only.
-- `/api/hardware/{id}/connect` only accepts private-network IPs or local
-  hostnames, or an explicit `LIFTGUARD_ESP32_ALLOWED_HOSTS` allowlist.
-- Face-enrollment uploads are limited in count and size.
-
-Copy `backend/.env.example` to `backend/.env` to configure. Full threat
-notes, biometric-data guidance, and laser-safety rules: `SECURITY.md`.
+Squat is the first movement mode, not the last. The engine is built so a new mode brings three things: its own joint metrics, a rep definition with gates that reject look-alike movements, and form rules a coach would sign off on. Each one is checked against recorded clips before it ships. The same pipeline, calibration and report format then carry over unchanged.
 
 ## Development
 
 ```bash
-# Backend: fast test suite (no opencv/mediapipe/torch needed)
+# Backend tests (fast, no camera or ML stack needed)
 cd backend && pip install -r requirements-dev.txt && pytest -q && ruff check app tests
 
-# Frontend: type-check + production build
+# Frontend type-check and production build
 cd frontend && npm ci && npx tsc --noEmit && npm run build
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of the above on every push to
-`main` and every pull request. `frontend/package-lock.json` is committed,
-so installs are reproducible.
+The backend suite has 67 tests. They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
 
-## Current engineering limits
-
-- Live sessions are process-local and support one frame-driving WebSocket viewer per camera session. Run a single backend worker; multi-worker deployment needs an external session coordinator and a broadcast stream.
-- Browser frames are sent as base64 JPEG inside JSON. This is simple and portable, but binary WebSocket frames or WebRTC would reduce bandwidth and CPU overhead for higher resolutions or remote viewing.
-- The camera, face-recognition, ML, Arduino, ESP32, and laser paths still require physical validation. Automated checks cover the web/API layer, not real-world biomechanical accuracy or hardware safety.
-- `liftguard_engine.py` remains a large compatibility module. Split rendering, inference, identity, feedback, and hardware orchestration behind typed interfaces before adding major features.
-
-## Installation
-
-### Prerequisites
-
-- Python 3.8-3.11 (the pinned MediaPipe build does not support Python 3.12+)
-- Node.js 20 or newer
-- A supported camera for live sessions
-- Optional: USB Arduino or WiFi ESP32 laser hardware
-
-### Backend
+Manual start, if you'd rather not use the launcher:
 
 ```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload --port 8000
+cd backend && python3.11 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+uvicorn app.main:app --port 8000          # terminal 1
+cd frontend && npm ci && npm run dev      # terminal 2, then open http://localhost:3000
 ```
 
-The full requirements include OpenCV, MediaPipe, PyTorch, and hardware libraries. For API tests and linting without the camera/ML stack, install `requirements-dev.txt` instead.
+Useful settings (environment variables):
 
-### Frontend
+| Variable | Default | What it does |
+|---|---|---|
+| `LIFTGUARD_CAMERA_SOURCE` | unset | Analyse a video file or stream URL instead of a webcam |
+| `LIFTGUARD_VOICE_ENABLED` | `true` | Spoken cues |
+| `LIFTGUARD_API_KEY` | unset | Require a key for every API and WebSocket call |
+| `LIFTGUARD_USER_DB` | `backend/data/…` | Where lifters and sessions are stored |
 
-```bash
-cd frontend
-npm ci
-cp .env.local.example .env.local
-npm run dev
+## Repository map
+
+```
+backend/    FastAPI app, pose + rep engine (app/video_analysis), sessions, face ID, tests
+frontend/   Next.js dashboard (live view, registration, sessions, reports, settings)
+firmware/   ESP32 laser firmware (experimental)
+docs/       Scope, method and known limits; Codespaces guide
+start.sh · START-LIFTGUARD.bat · stop.sh · STOP-LIFTGUARD.bat
 ```
 
-Open <http://localhost:3000>. The frontend expects the API at `http://localhost:8000` unless `NEXT_PUBLIC_API_BASE` is changed.
+## Security
 
-## Usage examples
+The backend can enroll faces, read session data and drive hardware, so it listens on `127.0.0.1` by default and has an opt-in API key. If you set `LIFTGUARD_API_KEY`, set the same value as `NEXT_PUBLIC_LIFTGUARD_API_KEY` for the dashboard. Only run the dashboard as a trusted operator UI, because `NEXT_PUBLIC_*` values end up in browser code. ESP32 connections only go to private-network hosts or an explicit allowlist. See [SECURITY.md](SECURITY.md).
 
-### Web dashboard
+## License
 
-1. Open **Users** to register a face profile, or continue as a guest when starting a session.
-2. Open **Live** and select **Start Session** to start the configured camera and live telemetry stream.
-3. Use **Hardware** only after connecting and validating the USB Arduino or ESP32 setup described in `firmware/README.md`.
-4. Stop the session before reviewing saved results in **Sessions**, **Analytics**, or **Reports**.
-
-### REST API
-
-With the backend running in open local-development mode:
-
-```bash
-# Health check
-curl http://localhost:8000/api/health
-
-# Read the current session defaults
-curl http://localhost:8000/api/settings
-
-# Start a session using the stored defaults
-curl -X POST http://localhost:8000/api/sessions/start \
-  -H 'Content-Type: application/json' \
-  -d '{}'
-```
-
-When `LIFTGUARD_API_KEY` is configured, add `-H "Authorization: Bearer $LIFTGUARD_API_KEY"` to REST requests and configure the trusted dashboard as described above. Interactive API documentation is available at <http://localhost:8000/docs>.
-
-### Standalone desktop mode
-
-```bash
-cd backend
-python run_standalone.py
-```
-
-This preserves the native OpenCV display path. Camera, model, speech, firmware, servo calibration, and laser behavior require real-device validation before use.
-
-## Project layout
-
-- `backend/app/api/` - FastAPI REST and WebSocket routes
-- `backend/app/core/` - application configuration, session orchestration, and compatibility engine
-- `backend/app/ml/` and `backend/app/tracking/` - inference and movement/fatigue logic
-- `backend/app/hardware/` - USB and WiFi laser transports
-- `frontend/app/` and `frontend/components/` - Next.js dashboard routes and UI
-- `firmware/` - ESP32 firmware and hardware notes
-- `.github/workflows/ci.yml` - backend and frontend validation
-
-## Validation boundary
-
-CI checks Python byte-compilation, Ruff, API/unit tests, TypeScript, and a production frontend build. It does not prove biomechanical accuracy or real camera, Arduino, ESP32, servo, speech, or laser safety. Complete a supervised hardware validation pass before gym use.
+See [LICENSE](LICENSE).

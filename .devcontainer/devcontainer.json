@@ -1,0 +1,26 @@
+{
+  // One-click LiftGuard in GitHub Codespaces: Code > Codespaces > Create.
+  // The first build installs everything (about 10 minutes on a 2-core
+  // machine); after that, opening the codespace starts the app and opens the
+  // dashboard in a new tab. See docs/CODESPACES.md.
+  "name": "LiftGuard",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+  },
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  // libgl1/libglib2.0-0: runtime libraries for opencv-contrib-python.
+  "onCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && ./start.sh --install-only",
+  "postAttachCommand": "./start.sh",
+  // Only the dashboard is forwarded. It proxies /api and /ws to the backend,
+  // which stays on localhost inside the codespace and is never exposed.
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "LiftGuard dashboard", "onAutoForward": "openBrowser" },
+    "8000": { "label": "LiftGuard API (internal)", "onAutoForward": "ignore" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["docs/CODESPACES.md"] },
+    "vscode": { "extensions": ["ms-python.python"] }
+  }
+}

@@ -33,3 +33,6 @@ backend/data/*.corrupt
 
 # CSV exports written by the live page EXPORT button
 backend/exports/
+
+# Launcher state (pids, logs) from start.sh / START-LIFTGUARD.bat
+.liftguard/
