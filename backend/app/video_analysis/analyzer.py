@@ -311,65 +311,102 @@ def _leg_gate(since_standing: Sequence[dict], current: Sequence[dict], threshold
     return None, evidence
 
 
+class RepStateMachine:
+    """Hysteresis rep counter shared by the offline analyzer and the live path.
+
+    Feed one pose frame at a time with an already-smoothed knee angle. Offline
+    analysis uses a centered median; the live path uses a trailing median.
+    """
+
+    def __init__(self, fps: float, config: AnalysisConfig, aspect: float = 1.0,
+                 gate_log: dict | None = None, history_limit: int | None = None) -> None:
+        self.fps, self.config, self.aspect = fps, config, aspect
+        self.history_limit = history_limit
+        self.reference_frames = max(1, int(fps * config.standing_reference_seconds))
+        self.log = gate_log if gate_log is not None else {}
+        self.log.update({"enabled": config.leg_gates, "leg_reference": None, "rejected_feet_moved": 0,
+                         "rejected_hip_drop": 0, "rejected_other_knee": 0, "rejected_rom_or_duration": 0})
+        self.reps: list[dict] = []
+        self.reset_phase()
+
+    def reset_phase(self) -> None:
+        self.state, self.start_frame = "standing", 0
+        self.current: list[dict] = []
+        self.since_standing: list[dict] = []
+
+    def push(self, frame_index: int, metrics: dict, knee: float, thresholds: dict,
+             leg_ref: float | None) -> dict | None:
+        """Advance one frame. Returns the new rep when one completes."""
+        config = self.config
+        self.log["leg_reference"] = round(leg_ref, 4) if leg_ref else None
+        self.current.append(metrics)
+        if self.state == "standing":
+            self.since_standing.append(metrics)
+            if self.history_limit and len(self.since_standing) > self.history_limit:
+                del self.since_standing[: len(self.since_standing) - self.history_limit]
+        if self.state == "standing" and knee <= thresholds["bottom_knee_deg"]:
+            self.state, self.start_frame, self.current = "bottom", frame_index, [metrics]
+            return None
+        if not (self.state == "bottom" and knee >= thresholds["standing_knee_deg"]):
+            return None
+        current, fps = self.current, self.fps
+        duration = (frame_index - self.start_frame) / fps
+        min_knee = min(m["knee_angle"] for m in current)
+        max_knee = max(m["knee_angle"] for m in current)
+        max_trunk = max(m["trunk_lean"] for m in current)
+        rom = max_knee - min_knee
+        reason, evidence = (None, {})
+        if not (config.min_rep_seconds <= duration <= config.max_rep_seconds and rom >= thresholds["min_rep_rom_deg"]):
+            reason = "rom_or_duration"
+        elif config.leg_gates:
+            reason, evidence = _leg_gate(self.since_standing, current, thresholds, leg_ref, config, self.aspect,
+                                         self.reference_frames)
+        rep = None
+        if reason:
+            self.log[f"rejected_{reason}"] += 1
+        else:
+            rep = {
+                "rep": len(self.reps) + 1,
+                "start_seconds": round(self.start_frame / fps, 3),
+                "end_seconds": round(frame_index / fps, 3),
+                "duration_seconds": round(duration, 3),
+                "min_knee_angle": round(min_knee, 1),
+                "max_trunk_lean": round(max_trunk, 1),
+                "rom_degrees": round(rom, 1),
+                "form_flags": _form_flags(min_knee, max_trunk, rom),
+                "hip_drop_ratio": evidence.get("hip_drop_ratio"),
+                "other_min_knee_angle": evidence.get("other_min_knee_angle"),
+                "ankle_shift_ratio": evidence.get("ankle_shift_ratio"),
+                "_end_frame": frame_index,
+            }
+            self.reps.append(rep)
+        self.state, self.current, self.since_standing = "standing", [], [metrics]
+        return rep
+
+
+def leg_reference(metrics: Sequence[dict], config: AnalysisConfig) -> float | None:
+    """Standing leg length: upright frames dominate the upper percentiles."""
+    extents = [m["leg_extent"] for m in metrics if m.get("leg_extent")]
+    if not extents or not config.leg_gates:
+        return None
+    ref = float(np.percentile(extents, 90))
+    return ref if ref > 0 else None
+
+
 def count_reps(frames: Sequence[dict | None], fps: float, config: AnalysisConfig, thresholds: dict,
                gate_log: dict | None = None, aspect: float = 1.0) -> list[dict]:
-    """Hysteresis state machine over smoothed knee angles; raw values feed per-rep metrics."""
+    """Offline pass: centered-median smoothing, then the shared state machine."""
     valid = [(i, m) for i, m in enumerate(frames) if m]
+    machine = RepStateMachine(fps, config, aspect, gate_log)
     if not valid:
         return []
-    extents = [m["leg_extent"] for _, m in valid if m.get("leg_extent")]
-    # Standing leg length reference: upright frames dominate the upper percentiles.
-    leg_ref = float(np.percentile(extents, 90)) if extents and config.leg_gates else None
-    if leg_ref is not None and leg_ref <= 0:
-        leg_ref = None
-    log = gate_log if gate_log is not None else {}
-    log.update({"enabled": config.leg_gates, "leg_reference": round(leg_ref, 4) if leg_ref else None,
-                "rejected_feet_moved": 0, "rejected_hip_drop": 0, "rejected_other_knee": 0, "rejected_rom_or_duration": 0})
-    since_standing: list[dict] = []
+    leg_ref = leg_reference([m for _, m in valid], config)
     # Median window of ~smoothing_seconds, odd length; off in FIXED mode to keep legacy behavior.
     window = (int(fps * config.smoothing_seconds) | 1) if config.calibrate else 1
     smoothed = smooth([m["knee_angle"] for _, m in valid], window)
-    bottom, standing = thresholds["bottom_knee_deg"], thresholds["standing_knee_deg"]
-    state, start_frame = "standing", 0
-    current: list[dict] = []
-    reps: list[dict] = []
     for (frame_index, metrics), knee in zip(valid, smoothed):
-        current.append(metrics)
-        if state == "standing":
-            since_standing.append(metrics)
-        if state == "standing" and knee <= bottom:
-            state, start_frame, current = "bottom", frame_index, [metrics]
-        elif state == "bottom" and knee >= standing:
-            duration = (frame_index - start_frame) / fps
-            min_knee = min(m["knee_angle"] for m in current)
-            max_knee = max(m["knee_angle"] for m in current)
-            max_trunk = max(m["trunk_lean"] for m in current)
-            rom = max_knee - min_knee
-            reason, evidence = (None, {})
-            if not (config.min_rep_seconds <= duration <= config.max_rep_seconds and rom >= thresholds["min_rep_rom_deg"]):
-                reason = "rom_or_duration"
-            elif config.leg_gates:
-                reason, evidence = _leg_gate(since_standing, current, thresholds, leg_ref, config, aspect,
-                                             max(1, int(fps * config.standing_reference_seconds)))
-            if reason:
-                log[f"rejected_{reason}"] += 1
-            else:
-                reps.append({
-                    "rep": len(reps) + 1,
-                    "start_seconds": round(start_frame / fps, 3),
-                    "end_seconds": round(frame_index / fps, 3),
-                    "duration_seconds": round(duration, 3),
-                    "min_knee_angle": round(min_knee, 1),
-                    "max_trunk_lean": round(max_trunk, 1),
-                    "rom_degrees": round(rom, 1),
-                    "form_flags": _form_flags(min_knee, max_trunk, rom),
-                    "hip_drop_ratio": evidence.get("hip_drop_ratio"),
-                    "other_min_knee_angle": evidence.get("other_min_knee_angle"),
-                    "ankle_shift_ratio": evidence.get("ankle_shift_ratio"),
-                    "_end_frame": frame_index,
-                })
-            state, current, since_standing = "standing", [], [metrics]
-    return reps
+        machine.push(frame_index, metrics, knee, thresholds, leg_ref)
+    return machine.reps
 
 
 def _pixel(point: Point, width: int, height: int) -> tuple[int, int]:

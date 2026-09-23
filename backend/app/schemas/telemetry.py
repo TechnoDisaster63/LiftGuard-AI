@@ -29,6 +29,7 @@ class TelemetryPayload(BaseModel):
     # Fatigue / IRI
     fatigue_score: Optional[float] = None
     fatigue_alert: Optional[str] = None
+    fatigue_indicator: dict[str, Any] = {}
     lifts_completed: Optional[int] = None
     injury_risk: Optional[float] = None
     injury_acute: Optional[float] = None
@@ -53,6 +54,7 @@ class TelemetryPayload(BaseModel):
     mirror_mode: bool = False
     calibration_mode: bool = False
     using_temporal: bool = True
+    validated_claims_only: bool = True
     # Perf
     fps: Optional[float] = None
     frame_count: int = 0

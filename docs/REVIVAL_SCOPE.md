@@ -47,6 +47,26 @@ Knee angle on one leg cannot tell a squat from lifting that leg (a held sprint "
 - Angles are 2D image-plane angles, not 3D joint angles.
 - Thresholds were checked on third-party dev clips and synthetic tests, not tuned to a target count. Side-view clips from the user are still needed.
 
+## Live path: same squat counter as the offline report
+
+The live session (`/ws/live`, Live page) used to count reps with the legacy `ExerciseTracker`, which never recognized the squat clip (exercise stayed "Unknown", 0 reps). Live reps, phase, and the exercise label now come from `app/video_analysis/live.py`, which runs the same per-frame metrics, rep state machine (`RepStateMachine`), calibration, and leg gates as the offline analyzer. Differences that come from streaming:
+
+- **Smoothing looks back only.** Knee angles use a trailing median (about 0.2 s) instead of a centered one.
+- **Rolling calibration.** Thresholds come from the last 30 s of pose frames and refresh about once a second. Nothing counts until that window shows at least the minimum squat range of motion. When counting becomes possible, the frames already in the window are replayed, so a rep done during warm-up still counts. It can show up about a second late.
+- **Pauses.** If the lifter stops long enough that the window has no squat motion, the mode shows `PAUSED` and counting waits for motion to return. Counts never go backwards.
+- **Frame rate.** Timing rules are in seconds. For a video file the counter uses the file's fps. For a webcam it measures the processing rate over the first 30 frames and keeps it.
+- **Label.** The HUD shows "Detecting squat..." until the first rep counts, then "Squat". The counter does not recognize other exercises.
+
+Telemetry `exercise_status` carries `rep_count`, `phase`, `phase_display`, `calibration_mode`, the current thresholds, `last_rep` (with its form-risk flags), and `rep_gates`. The legacy tracker still runs; its output is kept under `exercise_status.legacy_tracker` for comparison only.
+
+Checked on the dev landmark fixtures (`backend/tests/test_live_squat.py`): front-view squats 15 (same reps as offline, within 0.5 s), A-position hold 0, broad jumps 0. Through the full live engine (`LiftGuardAI.process_frame`, MediaPipe 0.10.5) the front-view squat clip gave 15 while the legacy tracker gave 0; the broad-jump and Superman dev clips gave 0. The offline known limits above apply here too.
+
+### Live screen: only defensible claims
+
+- **Fatigue indicator.** `fatigue_score` in live telemetry is now the same indicator as the offline report: 0-100, higher means more drift in rep duration, depth, and trunk lean versus the first reps. It is empty (`INSUFFICIENT_REPS`) until there are enough reps. The legacy `fatigue_engine` score (100 = fresh) showed as "100%" in red from the first frame. Full detail is under `fatigue_indicator`. This is a trend indicator, not a medical measure.
+- **Unvalidated model fields are not sent.** With `SessionManager.validated_claims_only` (on by default) the live telemetry sends None for the risk classifier's label/confidence/uncertainty/mode and every injury risk index field, and `using_temporal` false. No TCN weights have been trained or validated for this demo.
+- **Lateral lean.** The "Center yourself!" correction used shoulder height difference in raw pixels / 100, so about 30 px at 720p fired it for a centered lifter (every frame of the front-view squat clip). It now uses the shoulder-line angle and fires above 10 deg. In a side view the shoulders overlap, the angle cannot be measured, and the check is skipped. On the front-view squat clip it went from 1125/1125 frames to 0.
+
 ## Explicitly out of scope for this challenge demo
 
 Arduino/laser feedback, face recognition, live multi-user streaming, clinical claims, injury probabilities, TCN/MC-dropout claims, multiple exercises, cloud deployment, and mobile apps. Existing modules remain experimental and are not evidence for this demo.

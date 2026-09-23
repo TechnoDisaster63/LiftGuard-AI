@@ -117,6 +117,25 @@ try:
 except ImportError:
     print("⚠️  exercise_tracker.py not found")
  
+# ── Calibrated squat counter (shared with offline analysis) ──
+from ..video_analysis.live import LiveSquatFeed
+
+
+def shoulder_tilt_deg(landmarks_px, min_width_ratio=0.35):
+    """Angle of the shoulder line from horizontal, in degrees.
+
+    ``landmarks_px`` are MediaPipe landmarks in pixels (x*w, y*h, ...).
+    Returns None when the shoulders are too close together horizontally to
+    measure (side view): shoulder width under ``min_width_ratio`` of torso
+    height.
+    """
+    ls, rs, lh, rh = landmarks_px[11], landmarks_px[12], landmarks_px[23], landmarks_px[24]
+    dx, dy = abs(ls[0] - rs[0]), abs(ls[1] - rs[1])
+    torso = abs((ls[1] + rs[1]) / 2 - (lh[1] + rh[1]) / 2)
+    if torso <= 0 or dx < min_width_ratio * torso:
+        return None
+    return float(np.degrees(np.arctan2(dy, dx)))
+
 # ── Arduino Controller ───────────────────────────────────────
 ARDUINO_AVAILABLE = False
 try:
@@ -244,6 +263,7 @@ class SimpleSpeaker:
  
 class FormCorrector:
     """Generates prioritised corrections from biomechanical features."""
+    LATERAL_TILT_DEG = 10.0
  
     def __init__(self):
         self.last_corrections = {}
@@ -331,7 +351,18 @@ class FormCorrector:
                 'display': "Push knees outward!",
                 'body_part': 'LEFT_KNEE'
             })
-        if lat_tilt > 0.3:
+        # Shoulder-line tilt in degrees, measured in pixels with the frame's
+        # aspect ratio (set by LiftGuardAI.process_frame). The old
+        # spine_lateral_tilt feature is raw pixels / 100, so ~30 px of
+        # shoulder height difference at 720p fired this correction for a
+        # centered lifter. When shoulders overlap (side view) the tilt is
+        # not measurable and shoulder_tilt_deg is None.
+        if 'shoulder_tilt_deg' in features:
+            tilt_deg = features['shoulder_tilt_deg']
+            leaning = tilt_deg is not None and tilt_deg > self.LATERAL_TILT_DEG
+        else:
+            leaning = lat_tilt > 0.3
+        if leaning:
             corrections.append({
                 'id': 'lateral_lean', 'priority': 2,
                 'command': "You're leaning to one side! Center yourself!",
@@ -844,7 +875,7 @@ class LiftGuardAI:
             'disclaimer': 'IRI is not a medical diagnosis'
         }
         self.current_exercise_status = {
-            'rep_count': 0, 'exercise': 'Unknown', 'phase_display': '🧍'
+            'rep_count': 0, 'exercise': 'Detecting squat...', 'phase_display': '', 'phase': 'idle'
         }
         self.current_features    = None
         self.current_corrections = []
@@ -852,6 +883,13 @@ class LiftGuardAI:
         self.cached_results       = None
         self.cached_landmarks     = None
         self.cached_landmarks_raw = None
+
+        # Rep counting for the live path. The legacy ExerciseTracker still
+        # runs (its status is kept under 'legacy_tracker'), but reps, phase
+        # and exercise now come from the calibrated squat counter used by the
+        # offline analyzer. SessionManager passes the source fps for video
+        # files; for a webcam the feed measures the processing rate.
+        self.live_squat = LiveSquatFeed()
  
         self.feedback_message = "Stand in front of camera"
         self.feedback_color   = (255, 255, 255)
@@ -1063,6 +1101,10 @@ class LiftGuardAI:
                             )
                     )
  
+                    self.current_features['shoulder_tilt_deg'] = shoulder_tilt_deg(
+                        self.cached_landmarks
+                    )
+
                     if self.calibration_mode:
                         self._collect_calibration()
                     else:
@@ -1074,6 +1116,9 @@ class LiftGuardAI:
                 if self.arduino_connected:
                     self.arduino.update_frame(frame, None)
  
+        if should_process:
+            self._update_live_squat(w / h if h else None)
+
         if self.frame_count % 10 == 0:
             self._handle_voice()
         if self.frame_count % 5 == 0:
@@ -1090,6 +1135,21 @@ class LiftGuardAI:
         self.frame_times.append(time.time() - start_time)
         return output
  
+    def configure_live_squat(self, source_fps=None):
+        """Reset the squat counter. ``source_fps`` is the video file's fps
+        (None for a webcam, where the processing rate is measured)."""
+        fps = source_fps / self.process_every_n if source_fps else None
+        self.live_squat = LiveSquatFeed(fps=fps)
+        self.current_exercise_status = LiveSquatFeed.warming_status()
+
+    def _update_live_squat(self, aspect):
+        # A frame without a usable pose is still a frame: feeding None keeps
+        # the counter's clock aligned with the video.
+        status = self.live_squat.update(self.cached_landmarks_raw, aspect)
+        legacy = self.current_exercise_status.get('legacy_tracker') if isinstance(
+            self.current_exercise_status, dict) else None
+        self.current_exercise_status = {**status, 'legacy_tracker': legacy}
+
     def _clear_pose_cache(self):
         self.cached_results       = None
         self.cached_landmarks     = None
@@ -1140,11 +1200,14 @@ class LiftGuardAI:
         )
  
         # Exercise tracker
-        self.current_exercise_status = self.exercise_tracker.update(
+        legacy_status = self.exercise_tracker.update(
             self.current_features,
             self.current_risk_result,
             self.current_fatigue_status
         )
+        self.current_exercise_status = {
+            **(self.current_exercise_status or {}), 'legacy_tracker': legacy_status
+        }
  
         # Session history
         iri_val = self.current_injury_risk.get(
@@ -2178,6 +2241,8 @@ class LiftGuardAI:
  
     def reset_reps(self):
         self.exercise_tracker.reset()
+        self.live_squat.reset()
+        self.current_exercise_status = LiveSquatFeed.warming_status()
         print("\n🔄 Reps reset")
         if self.voice_enabled:
             self.speaker.speak_now("Reps reset")
