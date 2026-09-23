@@ -73,6 +73,9 @@ export function useLiveSession(sessionId: string | null) {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const lastObjectUrl = useRef<string | null>(null);
+  // Controls someone is awaiting (requestControl): their ack resolves the
+  // promise instead of showing a toast.
+  const pending = useRef(new Map<string, (message: string) => void>());
 
   const pushToast = useCallback((text: string, tone: "info" | "error" = "info") => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -130,7 +133,11 @@ export function useLiveSession(sessionId: string | null) {
         } else if (msg.type === "telemetry") {
           setTelemetry(msg as TelemetryPayload);
         } else if (msg.type === "control_ack") {
-          pushToast(msg.message, "info");
+          const waiter = pending.current.get(msg.action);
+          if (waiter) {
+            pending.current.delete(msg.action);
+            waiter(String(msg.message ?? ""));
+          } else pushToast(msg.message, "info");
         } else if (msg.type === "error") {
           if (msg.fatal) setFatalError(msg.message);
           else pushToast(msg.message, "error");
@@ -153,5 +160,25 @@ export function useLiveSession(sessionId: string | null) {
     }
   }, []);
 
-  return { frameUrl, telemetry, state, sendControl, toasts, fatalError };
+  /** Send a control and wait for the backend's answer (no toast). Rejects after timeoutMs. */
+  const requestControl = useCallback((action: string, timeoutMs = 10000) => {
+    return new Promise<string>((resolve, reject) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        reject(new Error("The live connection isn't open"));
+        return;
+      }
+      const timer = setTimeout(() => {
+        pending.current.delete(action);
+        reject(new Error("No answer from the backend"));
+      }, timeoutMs);
+      pending.current.set(action, (message) => {
+        clearTimeout(timer);
+        resolve(message);
+      });
+      ws.send(JSON.stringify({ action }));
+    });
+  }, []);
+
+  return { frameUrl, telemetry, state, sendControl, requestControl, toasts, fatalError };
 }

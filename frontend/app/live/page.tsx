@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { startWithCamera } from "@/lib/camera";
+import { otherCameras, rememberCamera, startWithCamera } from "@/lib/camera";
 import { useLiveSession, type TelemetryPayload } from "@/lib/ws";
 import { Alert, FLAG_CUE, Spinner } from "@/components/lg/ui";
 
@@ -37,6 +37,7 @@ function readStatus(t: TelemetryPayload | null) {
 const KEY_HELP: [string, string][] = [
   ["Space", "Stop and save"],
   ["V", "Voice cues on / off"],
+  ["K", "Switch to the next camera"],
   ["M", "Mirror the camera"],
   ["C", "Recalibrate depth"],
   ["R", "Reset the rep count"],
@@ -61,7 +62,36 @@ function LiveInner() {
   const [error, setError] = useState<string | null>(null);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { frameUrl, telemetry, state, sendControl, toasts, fatalError } = useLiveSession(sessionId);
+  const { frameUrl, telemetry, state, sendControl, requestControl, toasts, fatalError } = useLiveSession(sessionId);
+  // One-tap camera switch: cycle to the next camera that actually sends video.
+  const [camStatus, setCamStatus] = useState<{ text: string; busy: boolean; tone?: "ok" | "warn" } | null>(null);
+  const switchingRef = useRef(false);
+  const switchCamera = useCallback(async () => {
+    if (switchingRef.current) return;
+    switchingRef.current = true;
+    const current = Number(telemetry?.camera_id ?? 0);
+    const order = otherCameras(Number.isFinite(current) ? current : 0);
+    let found: number | null = null;
+    try {
+      for (let i = 0; i < order.length; i++) {
+        setCamStatus({ text: i === 0 ? "Looking for another camera" : `Looking for another camera · try ${i + 1} of ${order.length}`, busy: true });
+        const msg = await requestControl(`switch_camera:${order[i]}`).catch(() => "");
+        if (msg.startsWith("Switched")) {
+          found = order[i];
+          break;
+        }
+      }
+    } finally {
+      switchingRef.current = false;
+    }
+    if (found !== null) {
+      rememberCamera(found);
+      setCamStatus({ text: `Camera ${found} found`, busy: false, tone: "ok" });
+    } else {
+      setCamStatus({ text: "No other camera found · staying on this one", busy: false, tone: "warn" });
+    }
+    setTimeout(() => setCamStatus((s) => (s && !s.busy ? null : s)), 3000);
+  }, [telemetry?.camera_id, requestControl]);
 
   const handleStart = useCallback(async () => {
     if (starting || sessionId) return;
@@ -193,10 +223,11 @@ function LiveInner() {
       else if (k === "m") sendControl("toggle_mirror");
       else if (k === "c") sendControl(manualCal ? "complete_calibration" : "start_calibration");
       else if (k === "r") sendControl("reset_reps");
+      else if (k === "k") void switchCamera();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal]);
+  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal, switchCamera]);
 
   // ---------------- READY (no session) ----------------
   if (!sessionId && !starting) {
@@ -292,6 +323,16 @@ function LiveInner() {
           <span className="lg-dot" style={{ background: connecting ? "var(--lg-faint)" : "#FF5A1F" }} />
           {connecting ? "Connecting camera" : "Live · camera found"}
         </span>
+        <button
+          className="lg-chip lg-m"
+          style={{ ...glass, color: camStatus?.tone === "ok" ? "var(--lg-mint)" : camStatus?.tone === "warn" ? "var(--lg-amber)" : undefined }}
+          onClick={() => void switchCamera()}
+          disabled={connecting || stopping || !!camStatus?.busy}
+          aria-live="polite"
+        >
+          {camStatus?.busy && <Spinner />}
+          {camStatus ? camStatus.text : "Switch camera"} {!camStatus && <span style={{ opacity: 0.6 }}>K</span>}
+        </button>
         <span className="lg-chip lg-m" style={glass}>
           Movement analysis · Squat mode
         </span>
