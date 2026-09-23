@@ -17,9 +17,20 @@ from datetime import datetime
  
  
 # ── OpenCV face detector (always available) ──────────────────
-_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-_face_cascade = cv2.CascadeClassifier(_cascade_path)
-print("   ✅ OpenCV Lite Face Manager loaded (no TensorFlow needed)")
+# Needs opencv-contrib-python 4.8.0.74 (see requirements.txt): newer OpenCV
+# builds may not ship cv2.data or the cv2.face module this file uses.
+try:
+    _cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+    _face_cascade = cv2.CascadeClassifier(_cascade_path)
+except AttributeError:
+    _cascade_path, _face_cascade = None, None
+FACE_DETECTOR_OK = _face_cascade is not None and not _face_cascade.empty()
+if FACE_DETECTOR_OK:
+    print("   ✅ OpenCV Lite Face Manager loaded (no TensorFlow needed)")
+else:
+    print(f"   ⚠️  Haar face cascade failed to load (OpenCV {cv2.__version__}). "
+          "Face ID is off; sessions start as Guest. Install "
+          "opencv-contrib-python==4.8.0.74 to restore it.")
  
  
 DB_SCHEMA = """
@@ -102,6 +113,8 @@ class FaceMatcher:
  
     def detect_faces(self, frame_gray):
         """Returns list of (x,y,w,h) face rectangles."""
+        if not FACE_DETECTOR_OK:
+            return []
         faces = _face_cascade.detectMultiScale(
             frame_gray,
             scaleFactor  = 1.1,
@@ -490,8 +503,17 @@ class UserManager:
         return None, locations, distance
  
     def identify_from_camera(self, cap, timeout=20.0,
-                            allow_new_user=True, allow_guest=True):
-        """Full identification UI flow."""
+                            allow_new_user=True, allow_guest=True,
+                            interactive=True):
+        """Full identification UI flow.
+
+        ``interactive=False`` is for the web backend: no OpenCV windows, no
+        console input, no enrollment (it needs a typed name). It matches an
+        already-enrolled face if one is seen within ``timeout`` and otherwise
+        returns the Guest profile.
+        """
+        if not interactive:
+            return self._identify_headless(cap, timeout)
         print("\n" + "=" * 55)
         print("  👤 USER IDENTIFICATION (OpenCV Lite)")
         print(f"  Users: {len(self._get_user_count())}")
@@ -654,6 +676,27 @@ class UserManager:
         cv2.destroyWindow("LiftGuard AI — Identify")
         return UserProfile.guest()
  
+    def _identify_headless(self, cap, timeout):
+        """Recognize an enrolled user without any UI; Guest on no match."""
+        if not self.get_all_users() or not self.matcher.is_trained or not FACE_DETECTOR_OK:
+            print("  👤 Guest (no enrolled users or face ID unavailable)")
+            return UserProfile.guest()
+        self.id_candidate, self.id_frame_count = None, 0
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # identify_from_frame returns a profile only after CONFIRM_FRAMES
+            # consecutive matches of the same user.
+            profile, _, _ = self.identify_from_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            if profile is not None:
+                self.current_user = profile
+                print(f"  ✅ Identified: {profile.display_name}")
+                return profile
+        print("  👤 Guest (no enrolled face recognized)")
+        return UserProfile.guest()
+
     def _enroll_new_user(self, cap, existing_frames=None):
         """Enroll new user with LBPH face recognition."""
         print("\n" + "=" * 55)

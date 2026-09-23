@@ -37,10 +37,10 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
         use_temporal=merged["use_temporal"],
     )
     try:
-        # manager.start() blocks on face-ID (up to 25s) — run it in a
+        # manager.start() can block on headless face-ID (up to 8s) — run it in a
         # threadpool so it doesn't stall the event loop for every other
         # client (other sessions' WebSocket frames, health checks, etc.)
-        # while one person is enrolling.
+        # while the camera opens and face-ID runs.
         await run_in_threadpool(manager.start, camera_id=merged["camera_id"])
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

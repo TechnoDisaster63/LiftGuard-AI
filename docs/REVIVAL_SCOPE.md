@@ -84,4 +84,8 @@ pip install mediapipe==0.10.5 opencv-contrib-python==4.8.0.74 numpy==1.24.3
 python analyze_video.py C:\path\to\side-view-squats.mp4 --output outputs\demo
 ```
 
+Full backend (`pip install -r requirements.txt`): OpenCV stays pinned to `opencv-contrib-python==4.8.0.74`. An unpinned install can pull OpenCV 5.x, which breaks Haar cascade loading and `cv2.face`; face ID then turns itself off with a warning and sessions start as Guest. On Python 3.12 the requirements file switches to `mediapipe==0.10.14`, `numpy==1.26.4`, `scipy==1.11.4`, and `scikit-learn==1.3.2`, the nearest releases with 3.12 wheels. That combination resolves on Windows (checked with `uv pip compile`) and was reported working in a separate live run. Python 3.11 with the 0.10.5 pins is still the tested path.
+
+Live session start is headless: it never asks for a name on the console and never opens an OpenCV window. It matches an already-enrolled face within about 8 seconds, otherwise it starts as Guest (including when no users are enrolled). New users are not enrolled from a web session start. A video file used as the camera source skips face ID so no frames of the clip are consumed. The desktop app (`run_standalone.py`) keeps its interactive identify and enrollment windows.
+
 Recording: one person, full body visible, fixed side-view camera, stable light, no mirrors or bystanders, 20-60 seconds. Use bodyweight or a safe light load with supervision; do not deliberately perform unsafe loaded form for a demo.
