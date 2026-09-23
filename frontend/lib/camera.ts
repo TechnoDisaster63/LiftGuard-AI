@@ -62,7 +62,7 @@ export async function startWithCamera(
     const index = order[i];
     onTrying?.(index, i + 1, order.length);
     try {
-      const res = await api.sessions.start({ camera_id: index });
+      const res = await api.sessions.start({ camera_id: index, voice_enabled: false }); // the browser speaks (lib/voice.ts)
       write(LAST_KEY, String(index));
       return { sessionId: res.session_id, camera: index };
     } catch (e) {
