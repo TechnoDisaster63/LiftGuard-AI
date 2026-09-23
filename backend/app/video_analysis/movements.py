@@ -25,6 +25,11 @@ def _pushup():
     return LivePushupCounter
 
 
+def _lunge():
+    from .lunge import LiveLungeCounter
+    return LiveLungeCounter
+
+
 MOVEMENT_MODES: dict[str, dict] = {
     "squat": {"label": "Squat", "noun": "squat", "source": "calibrated_squat_counter", "view": "side",
               "counter": _squat, "validated": True,
@@ -33,6 +38,10 @@ MOVEMENT_MODES: dict[str, dict] = {
                "counter": _pushup, "validated": False,
                "watches": "depth, hip line, tempo",
                "pending": "Needs a check on a recorded side-view clip before it can be picked."},
+    "lunge": {"label": "Lunge", "noun": "lunge", "source": "calibrated_lunge_counter", "view": "side",
+              "counter": _lunge, "validated": False,
+              "watches": "front knee depth, trunk lean, knee over toes, tempo",
+              "pending": "Needs a check on a recorded side-view clip before it can be picked."},
 }
 
 DEFAULT_MODE = "squat"
@@ -62,7 +71,7 @@ def modes_for_api() -> list[dict]:
 RECOGNIZER_LABELS: dict[str, str | None] = {
     "squats": "squat",
     "pushups": "pushup",
-    "lunges": None,
+    "lunges": "lunge",
     "jumping_jacks": None,
     "situps": None,
     "bicep_curls": None,
