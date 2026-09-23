@@ -25,6 +25,9 @@ class SessionStartRequest(BaseModel):
 class SessionStartResponse(BaseModel):
     session_id: str
     status: str = "started"
+    # True only when this session's body landmarks will be saved (the
+    # contributor has consented); the live page shows it as a chip.
+    contributing: bool = False
 
 
 class SessionReport(BaseModel):

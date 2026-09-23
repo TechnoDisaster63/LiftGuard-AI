@@ -205,8 +205,10 @@ class FakeManager:
 
 def start(client, monkeypatch, **body):
     monkeypatch.setattr(routes_sessions, "SessionManager", FakeManager)
-    sid = client.post("/api/sessions/start", json={"camera_id": "browser", **body}).json()["session_id"]
-    return sid, routes_sessions._sessions[sid]
+    out = client.post("/api/sessions/start", json={"camera_id": "browser", **body}).json()
+    manager = routes_sessions._sessions[out["session_id"]]
+    assert out["contributing"] is (manager.contrib_recorder is not None)
+    return out["session_id"], manager
 
 
 def test_session_without_consent_does_not_record(client, monkeypatch):

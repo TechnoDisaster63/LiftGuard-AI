@@ -2,6 +2,7 @@
 // camera that worked, then indexes 0-3, and keep the first one that actually
 // sends video. The backend's start endpoint already refuses (400) a camera
 // that opens but sends no frames, so a successful start means "camera found".
+import { contribStartFields } from "./contrib";
 import { api, ApiError } from "./api";
 
 const LAST_KEY = "lg.camera.last";
@@ -51,7 +52,7 @@ export const NO_CAMERA_MESSAGE =
  */
 export async function startWithCamera(
   onTrying?: (index: number, attempt: number, total: number) => void
-): Promise<{ sessionId: string; camera: number }> {
+): Promise<{ sessionId: string; camera: number; contributing: boolean }> {
   const pin = getCameraPin();
   const last = getLastCamera();
   const order =
@@ -62,9 +63,9 @@ export async function startWithCamera(
     const index = order[i];
     onTrying?.(index, i + 1, order.length);
     try {
-      const res = await api.sessions.start({ camera_id: index, voice_enabled: false }); // the browser speaks (lib/voice.ts)
+      const res = await api.sessions.start({ camera_id: index, voice_enabled: false, ...contribStartFields() }); // the browser speaks (lib/voice.ts)
       write(LAST_KEY, String(index));
-      return { sessionId: res.session_id, camera: index };
+      return { sessionId: res.session_id, camera: index, contributing: !!res.contributing };
     } catch (e) {
       // Only a camera problem means "try the next one". Anything else
       // (backend down, engine failed to load) won't be fixed by another index.
