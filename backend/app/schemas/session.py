@@ -14,6 +14,12 @@ class SessionStartRequest(BaseModel):
     model_complexity: Optional[int] = None
     process_every_n: Optional[int] = None
     use_temporal: Optional[bool] = None
+    # Opt-in data contribution. Only used when this anonymous id has given
+    # consent (POST /api/contrib/consent); then the session's body landmarks
+    # are saved when it stops. Never falls back to settings.
+    contributor_id: Optional[str] = None
+    device_class: Optional[Literal["phone", "tablet", "desktop", "unknown"]] = None
+    camera_facing: Optional[Literal["environment", "user", "unknown"]] = None
 
 
 class SessionStartResponse(BaseModel):
