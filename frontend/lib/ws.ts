@@ -93,7 +93,10 @@ export function useLiveSession(sessionId: string | null) {
       return;
     }
 
-    const wsBase = API_BASE.replace(/^http/, "ws");
+    // API_BASE "" means same origin (proxy mode, e.g. Codespaces).
+    const wsBase = API_BASE
+      ? API_BASE.replace(/^http/, "ws")
+      : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`;
     const url = new URL(`${wsBase}/ws/live/${sessionId}`);
     if (API_KEY) url.searchParams.set("token", API_KEY);
     const ws = new WebSocket(url);

@@ -73,7 +73,7 @@ export default function SettingsPage() {
           <div className="lg-m lg-dim">Backend</div>
           <div className="flex items-center gap-2 mt-2" style={{ fontSize: 15 }}>
             <span className="lg-dot" style={{ background: online ? "var(--lg-mint)" : online === false ? "var(--lg-amber)" : "var(--lg-faint)" }} />
-            {online === null ? "Checking" : online ? "Online" : "Offline"} · <span className="lg-dim">{API_BASE}</span>
+            {online === null ? "Checking" : online ? "Online" : "Offline"} · <span className="lg-dim">{API_BASE || "same origin (proxied)"}</span>
           </div>
           <p className="lg-faint mt-2" style={{ fontSize: 13 }}>
             Set with NEXT_PUBLIC_API_BASE at build time.

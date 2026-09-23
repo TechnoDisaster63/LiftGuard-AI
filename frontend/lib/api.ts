@@ -101,7 +101,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     });
   } catch {
     throw new ApiError(
-      `Can't reach the LiftGuard backend at ${API_BASE}. Is it running? (see README: uvicorn app.main:app)`,
+      `Can't reach the LiftGuard backend at ${API_BASE || "this site (proxied)"}. Is it running? Start everything with START-LIFTGUARD.bat (Windows) or ./start.sh.`,
       0
     );
   }
