@@ -82,7 +82,8 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
         user_id=getattr(user, "user_id", None) if user else None,
         display_name=getattr(user, "display_name", "Guest") if user else "Guest",
         is_guest=getattr(user, "is_guest", True) if user else True,
-        camera_id=merged["camera_id"],
+        # The column is an integer; -1 records "the viewer's browser camera".
+        camera_id=merged["camera_id"] if isinstance(merged["camera_id"], int) else -1,
         using_temporal=merged["use_temporal"],
         started_at=datetime.now(timezone.utc),
     ))
