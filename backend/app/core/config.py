@@ -46,6 +46,11 @@ class Settings:
         "LIFTGUARD_USER_DB", str(BACKEND_ROOT / "data" / "liftguard_users.db")
     )
 
+    # Opt-in training-data contributions (body landmarks only, see
+    # app/contrib/store.py). Local copy; mirrored to a private HF dataset
+    # when LIFTGUARD_CONTRIB_HF_REPO and LIFTGUARD_CONTRIB_HF_TOKEN are set.
+    CONTRIB_DIR: str = os.getenv("LIFTGUARD_CONTRIB_DIR", str(BACKEND_ROOT / "data" / "contrib"))
+
     # WebSocket target frame rate (the engine itself decides real throughput;
     # this just paces the read loop so we don't spin a CPU core at 100%)
     WS_TARGET_FPS: int = int(os.getenv("LIFTGUARD_WS_FPS", "30"))

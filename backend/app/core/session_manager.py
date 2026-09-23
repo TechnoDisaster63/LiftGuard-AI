@@ -315,6 +315,16 @@ class SessionManager:
 
         output = self.engine.process_frame(frame)  # same call the desktop app makes
 
+        recorder = getattr(self, "contrib_recorder", None)
+        if recorder is not None and self.engine.frame_count % self.engine.process_every_n == 0:
+            # Opt-in only (set by the start route after a consent check).
+            # Body landmarks of this processed frame, never the frame itself.
+            try:
+                h, w = frame.shape[:2]
+                recorder.add(self.engine.cached_landmarks_raw, w, h, mirror=self.engine.mirror_mode)
+            except Exception:
+                pass  # recording must never break the live session
+
         ok, buf = cv2.imencode(".jpg", output, [cv2.IMWRITE_JPEG_QUALITY, 80])
         jpeg_bytes = buf.tobytes() if ok else None
 

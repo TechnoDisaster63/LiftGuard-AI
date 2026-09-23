@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -7,11 +8,15 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session as DBSession
 from starlette.concurrency import run_in_threadpool
 
-from ..core.session_manager import SessionManager
+from ..contrib.store import LandmarkRecorder
+from ..core.session_manager import SessionManager, _live_reps
+from . import routes_contrib
 from ..core.settings_store import session_defaults
 from ..db.database import get_db
 from ..db.models import SessionRecord
 from ..schemas.session import SessionStartRequest, SessionStartResponse, SessionReport
+
+APP_VERSION = os.getenv("LIFTGUARD_APP_VERSION", "")
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -74,6 +79,7 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
 
     session_id = str(uuid.uuid4())
     manager.started_monotonic = time.monotonic()
+    manager.contrib_recorder = _contrib_recorder(req, merged["camera_id"])
     _sessions[session_id] = manager
 
     user = getattr(manager.engine, "current_user", None)
@@ -96,8 +102,37 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
 async def stop_session(session_id: str, db: DBSession = Depends(get_db)):
     if session_id not in _sessions:
         raise HTTPException(status_code=404, detail="Session not found")
-    await _finish_session(session_id, db)
-    return {"status": "stopped"}
+    contribution = await _finish_session(session_id, db)
+    # contribution is the saved set's summary (for the post-set card), or
+    # None when this session was not contributing or had nothing to keep.
+    return {"status": "stopped", "contribution": contribution}
+
+
+def _contrib_recorder(req: SessionStartRequest, camera_id):
+    """A landmark recorder only when this contributor has consented."""
+    if not req.contributor_id:
+        return None
+    try:
+        store = routes_contrib.get_store()
+        if store.consent(req.contributor_id) is None:
+            return None
+        source = "browser" if camera_id == "browser" else ("webcam" if isinstance(camera_id, int) else "file")
+        return LandmarkRecorder(req.contributor_id, req.device_class or "unknown",
+                                req.camera_facing or "unknown", source)
+    except Exception:  # a bad id or unreadable store: just do not record
+        return None
+
+
+def _save_contribution(manager):
+    recorder = getattr(manager, "contrib_recorder", None)
+    if recorder is None:
+        return None
+    manager.contrib_recorder = None
+    try:
+        reps = _live_reps(manager.engine)
+    except Exception:
+        reps = []
+    return routes_contrib.get_store().save(recorder, reps, app_version=APP_VERSION)
 
 
 # Seconds after start during which an unwatched session still counts as
@@ -105,10 +140,15 @@ async def stop_session(session_id: str, db: DBSession = Depends(get_db)):
 ORPHAN_GRACE_S = 15.0
 
 
-async def _finish_session(session_id: str, db: DBSession) -> None:
+async def _finish_session(session_id: str, db: DBSession):
     manager = _sessions.get(session_id)
     if manager is None:  # already finished by a concurrent stop
-        return
+        return None
+
+    try:
+        contribution = await run_in_threadpool(_save_contribution, manager)
+    except Exception:  # never let a contribution failure block stopping
+        contribution = None
 
     # Always free the camera and drop the session, even if building the
     # report or stopping hardware fails; otherwise the camera stays locked
@@ -141,6 +181,7 @@ async def _finish_session(session_id: str, db: DBSession) -> None:
             record.display_name = report["user"].get("display_name", record.display_name)
             record.is_guest = report["user"].get("is_guest", record.is_guest)
         db.commit()
+    return contribution
 
 
 @router.get("/{session_id}/report", response_model=SessionReport)

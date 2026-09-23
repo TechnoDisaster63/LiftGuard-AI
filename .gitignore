@@ -36,3 +36,4 @@ backend/exports/
 
 # Launcher state (pids, logs) from start.sh / START-LIFTGUARD.bat
 .liftguard/
+backend/data/contrib/
