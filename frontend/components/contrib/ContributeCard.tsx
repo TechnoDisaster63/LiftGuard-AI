@@ -29,8 +29,11 @@ const SAVED = [
 ];
 const NEVER = ["Video or photos", "Your face (face points are dropped on the server before anything is kept)", "Your name, account or location"];
 
-/** Ready-screen card: the "Help train LiftGuard" switch, off by default. */
-export function ContributeCard({ showLink = true }: { showLink?: boolean }) {
+/** Ready-screen control for "Help train LiftGuard", off by default.
+ * variant="card": the switch card beside the hero (desktop, My contributions).
+ * variant="button": a full-width labelled button for the phone hero, where a
+ * small switch below the fold was easy to miss. Both open the same consent. */
+export function ContributeCard({ showLink = true, variant = "card" }: { showLink?: boolean; variant?: "card" | "button" }) {
   const on = useContributing();
   const [asking, setAsking] = useState(false);
   const [adult, setAdult] = useState(false);
@@ -51,29 +54,9 @@ export function ContributeCard({ showLink = true }: { showLink?: boolean }) {
     }
   };
 
-  return (
-    <div className="lg-card lg-contrib">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Help train LiftGuard</div>
-          <div className="lg-dim mt-1" style={{ fontSize: 13 }}>
-            {on ? "On · your sets save body points only, never video." : "Off · nothing from your sessions is kept for training."}
-          </div>
-        </div>
-        <button
-          role="switch"
-          aria-checked={on}
-          aria-label="Help train LiftGuard"
-          className={`lg-switch ${on ? "on" : ""}`}
-          onClick={() => (on ? setContributing(false) : setAsking(true))}
-        />
-      </div>
-      {showLink && (
-        <Link href="/contributions" className="lg-m lg-dim inline-block mt-3" style={{ fontSize: 11 }}>
-          My contributions →
-        </Link>
-      )}
-
+  const toggle = () => (on ? setContributing(false) : setAsking(true));
+  const sheet = (
+    <>
       {asking && createPortal(
         <div className="lg-sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="lg-consent-title" onClick={() => !busy && setAsking(false)}>
           <div className="lg-sheet lg-fade" onClick={(e) => e.stopPropagation()}>
@@ -107,6 +90,56 @@ export function ContributeCard({ showLink = true }: { showLink?: boolean }) {
         </div>,
         document.body
       )}
+    </>
+  );
+
+  if (variant === "button") {
+    return (
+      <>
+        <button
+          type="button"
+          aria-pressed={on}
+          className={`lg-btn lg-contrib-btn ${on ? "on" : ""}`}
+          onClick={toggle}
+        >
+          <span className="lg-dot" style={{ background: on ? "var(--lg-mint)" : "var(--lg-faint)" }} />
+          <span>Help train LiftGuard</span>
+          <span className="lg-contrib-state">{on ? "On" : "Off"}</span>
+        </button>
+        {on && showLink && (
+          <Link href="/contributions" className="lg-m lg-dim" style={{ fontSize: 11 }}>
+            On · body points only, never video · My contributions →
+          </Link>
+        )}
+        {sheet}
+      </>
+    );
+  }
+
+  return (
+    <div className="lg-card lg-contrib">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Help train LiftGuard</div>
+          <div className="lg-dim mt-1" style={{ fontSize: 13 }}>
+            {on ? "On · your sets save body points only, never video." : "Off · nothing from your sessions is kept for training."}
+          </div>
+        </div>
+        <button
+          role="switch"
+          aria-checked={on}
+          aria-label="Help train LiftGuard"
+          className={`lg-switch ${on ? "on" : ""}`}
+          onClick={toggle}
+        />
+      </div>
+      {showLink && (
+        <Link href="/contributions" className="lg-m lg-dim inline-block mt-3" style={{ fontSize: 11 }}>
+          My contributions →
+        </Link>
+      )}
+
+      {sheet}
     </div>
   );
 }

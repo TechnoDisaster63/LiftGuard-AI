@@ -339,6 +339,10 @@ function LiveInner() {
             <button className="lg-btn lg-start-device" onClick={handleStartDevice}>
               Use this device&apos;s camera
             </button>
+            {/* Phones: the switch card sits below the fold, so the choice is a button here. */}
+            <div className="lg-show-sm flex-col gap-2">
+              <ContributeCard variant="button" />
+            </div>
           </div>
           <div className="lg-m lg-faint mt-3" style={{ fontSize: 11, maxWidth: 560 }}>
             Start session uses the camera on the LiftGuard computer. &ldquo;Use this device&apos;s camera&rdquo; streams the camera of the phone or laptop you&apos;re holding.
@@ -362,7 +366,9 @@ function LiveInner() {
             </div>
           )}
           {savedSet && <SetRatingCard key={savedSet.set_id} set={savedSet} />}
-          <ContributeCard />
+          <div className="lg-hide-sm">
+            <ContributeCard />
+          </div>
           <div className="lg-card">
             <div className="lg-m lg-dim mb-3">During a session</div>
             {KEY_HELP.map(([k, v]) => (
