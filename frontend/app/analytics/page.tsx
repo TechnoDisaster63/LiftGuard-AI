@@ -59,23 +59,7 @@ export default function AnalyticsPage() {
         )}
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="p-5">
-            <p className="font-display text-base mb-1">Injury Risk Index</p>
-            <p className="text-[11px] font-mono text-ink-faint mb-4">
-              Combined acute + cumulative IRI, per processed frame
-            </p>
-            {loading ? (
-              <div className="flex items-center gap-2 text-sm text-ink-faint font-mono py-10 justify-center">
-                <Loader2 size={15} className="animate-spin" /> Loading…
-              </div>
-            ) : (
-              <TimelineChart data={iri} color="#EF4444" />
-            )}
-          </Card>
-        </motion.div>
-
+      <div className="grid grid-cols-1 gap-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
           <Card className="p-5">
             <p className="font-display text-base mb-1">Spine Flexion</p>

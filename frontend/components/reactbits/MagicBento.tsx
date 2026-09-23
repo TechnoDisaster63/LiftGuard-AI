@@ -25,19 +25,19 @@ export interface CardDatum {
 export const DEFAULT_BENTO_CARDS: CardDatum[] = [
   {
     title: "Live Analysis",
-    description: "Real-time pose tracking, skeleton overlay, and risk classification",
+    description: "Real-time pose tracking, skeleton overlay, and squat rep counting",
     label: "Live",
     href: "/live",
   },
   {
-    title: "Injury Risk Index",
-    description: "Clinical-grade acute + cumulative risk scoring, TCN + uncertainty",
-    label: "IRI V2",
-    href: "/analytics",
+    title: "Squat Reports",
+    description: "Rep counts, form-risk flags, and a rep-based fatigue indicator per session",
+    label: "Reports",
+    href: "/sessions",
   },
   {
     title: "Analytics",
-    description: "Session trends — IRI and spine flexion timelines, per session",
+    description: "Session trends — spine flexion timeline, per session",
     label: "Insights",
     href: "/analytics",
   },

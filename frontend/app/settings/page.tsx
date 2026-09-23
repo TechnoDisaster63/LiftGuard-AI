@@ -150,12 +150,6 @@ export default function SettingsPage() {
               checked={defaults.arduino_enabled}
               onChange={(v) => patch({ arduino_enabled: v })}
             />
-            <ToggleRow
-              label="Temporal Model (TCN)"
-              description="Falls back to frame-level classification when off"
-              checked={defaults.use_temporal}
-              onChange={(v) => patch({ use_temporal: v })}
-            />
 
             <div className="flex items-center justify-between py-3">
               <div>
