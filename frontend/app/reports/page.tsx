@@ -1,16 +1,62 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
-import { Loader2, FileText } from "lucide-react";
 import { api, SessionReport } from "@/lib/api";
-import { StatCard } from "@/components/live/StatCard";
-import { TimelineChart } from "@/components/charts/TimelineChart";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { RelatedSessionsFolder } from "@/components/reports/RelatedSessionsFolder";
+import { exerciseOf, FATIGUE_LABEL, useSessionRows } from "@/lib/history";
+import { Alert, Split, fmtDate } from "@/components/lg/ui";
+
+function SpineTrace({ values }: { values: number[] }) {
+  if (values.length < 2) {
+    return <div className="lg-dim py-16 text-center">Not enough frames recorded for a trace.</div>;
+  }
+  const W = 820;
+  const H = 300;
+  const max = Math.max(10, ...values);
+  const step = W / (values.length - 1);
+  const pts = values.map((v, i) => `${(i * step).toFixed(1)},${(H - (v / max) * (H - 20)).toFixed(1)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H + 24}`} className="w-full" style={{ height: "auto", maxHeight: 340 }} role="img" aria-label={`Spine flexion over ${values.length} samples, peak ${max.toFixed(0)} degrees`}>
+      <line x1="0" y1={H - (H - 20)} x2={W} y2={H - (H - 20)} stroke="rgba(244,243,238,.07)" />
+      <text x="0" y={H - (H - 20) - 5} fill="rgba(244,243,238,.4)" fontSize="10" fontFamily="var(--font-geist-mono)">
+        {max.toFixed(0)}°
+      </text>
+      <line x1="0" y1={H} x2={W} y2={H} stroke="rgba(244,243,238,.15)" />
+      <polyline points={pts} fill="none" stroke="#F4F3EE" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PickSession() {
+  const { rows } = useSessionRows({ limit: 8 });
+  return (
+    <div className="lg-fade">
+      <div className="lg-m lg-dim">Reports</div>
+      <div className="lg-d mt-1.5" style={{ fontSize: 92 }}>
+        Pick a session
+      </div>
+      <div className="mt-6">
+        {rows === null && <div className="lg-skel" style={{ height: 120 }} />}
+        {rows?.length === 0 && (
+          <p className="lg-dim" style={{ fontSize: 16 }}>
+            No saved sessions yet. <Link href="/live" className="underline">Start one</Link>.
+          </p>
+        )}
+        {rows?.map((r) => (
+          <Link key={r.session_id} href={`/reports?history=${r.session_id}`} className="lg-row lg-hoverrow grid items-center gap-5 py-4" style={{ gridTemplateColumns: "150px 180px minmax(0,1fr) 90px" }}>
+            <span className="lg-m">{fmtDate(r.started_at)}</span>
+            <span style={{ fontSize: 16 }}>{r.is_guest ? "Guest" : r.display_name}</span>
+            <Split clean={(r.reps ?? 0) - (r.flagged ?? 0)} flagged={r.flagged ?? 0} />
+            <span className="lg-d text-right" style={{ fontSize: 36 }}>
+              {r.reps ?? "—"}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ReportContent() {
   const params = useSearchParams();
@@ -19,8 +65,11 @@ function ReportContent() {
   const [report, setReport] = useState<SessionReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isHistorical, setIsHistorical] = useState(false);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
 
   useEffect(() => {
+    setReport(null);
+    setError(null);
     if (liveId) {
       setIsHistorical(false);
       api.sessions
@@ -33,128 +82,128 @@ function ReportContent() {
             setReport(r);
           })
         )
-        .catch((e) => setError(e.message));
+        .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load the report"));
     } else if (historyId) {
       setIsHistorical(true);
-      api.sessions.historyReport(historyId).then(setReport).catch((e) => setError(e.message));
+      api.sessions
+        .historyReport(historyId)
+        .then(setReport)
+        .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load the report"));
+      api.sessions
+        .history({ limit: 100 })
+        .then(({ sessions }) => setStartedAt(sessions.find((s) => s.session_id === historyId)?.started_at ?? null))
+        .catch(() => {});
     }
   }, [liveId, historyId]);
 
   const sessionId = liveId ?? historyId;
-
-  if (!sessionId) {
+  if (!sessionId) return <PickSession />;
+  if (error)
     return (
-      <Card>
-        <EmptyState
-          icon={<FileText size={22} strokeWidth={1.5} />}
-          message="Pick a session to view its report"
-          actionLabel="Go to Sessions"
-          actionHref="/sessions"
-        />
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-control border border-risk-high/30 bg-risk-high/5 px-4 py-3 text-sm text-risk-high">
-        {error}
+      <div className="lg-fade max-w-xl">
+        <Alert>{error}</Alert>
+        <Link href="/sessions" className="lg-btn g mt-4">
+          Back to sessions
+        </Link>
       </div>
     );
-  }
-
-  if (!report) {
+  if (!report)
     return (
-      <div className="flex items-center gap-2 text-sm text-ink-faint font-mono py-10 justify-center">
-        <Loader2 size={15} className="animate-spin" /> Loading report…
+      <div className="grid gap-7" style={{ gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)" }}>
+        <div className="lg-skel" style={{ height: 520 }} />
+        <div className="lg-skel" style={{ height: 520 }} />
       </div>
     );
-  }
+
+  const e = exerciseOf(report);
+  const reps = e.reps ?? 0;
+  const flagged = e.flagged ?? 0;
+  const who = report.user ? (report.user.is_guest ? "Guest" : report.user.display_name) : "Unknown";
+  const fat = FATIGUE_LABEL[e.fatigueStatus ?? ""];
+  const avgs: [string, string][] = [
+    ["Rep time", e.avgRepSeconds != null ? `${e.avgRepSeconds.toFixed(1)}s` : "—"],
+    ["Deepest knee angle", e.avgDeepestKnee != null ? `${Math.round(e.avgDeepestKnee)}°` : "—"],
+    ["Range of motion", e.avgRom != null ? `${Math.round(e.avgRom)}°` : "—"],
+    ["Movements not counted", e.rejected != null ? String(e.rejected) : "—"],
+  ];
 
   return (
-    <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-mono uppercase tracking-wider text-ink-faint mb-1">
-                Session
-              </p>
-              <p className="font-mono text-sm text-ink">{sessionId}</p>
-            </div>
-            <Badge tone={isHistorical ? "neutral" : "brand"} dot={!isHistorical}>
-              {isHistorical ? "Completed" : "Live"}
-            </Badge>
+    <div className="lg-fade grid gap-7" style={{ gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)" }}>
+      <div className="min-w-0">
+        <div className="flex items-end gap-7">
+          <div className="lg-d" style={{ fontSize: 200 }}>
+            {reps}
           </div>
-          {report.user && (
-            <p className="text-sm text-ink-muted mt-2">
-              {report.user.display_name} {report.user.is_guest && "(guest)"}
-            </p>
-          )}
-        </Card>
-      </motion.div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Camera" value={`#${report.camera_id}`} />
+          <div style={{ paddingBottom: 18 }}>
+            <div className="lg-m lg-dim">
+              Squat reps · {startedAt ? fmtDate(startedAt) : isHistorical ? "saved" : "live now"} · {who} · camera {report.camera_id}
+            </div>
+            <div className="lg-d mt-2" style={{ fontSize: 64, color: reps === 0 ? "var(--lg-faint)" : flagged ? "var(--lg-amber)" : "var(--lg-mint)" }}>
+              {reps === 0 ? "No reps counted" : flagged ? `${flagged} flagged` : "All clean"}
+            </div>
+            <div className="mt-2" style={{ fontSize: 15 }}>
+              {reps === 0
+                ? e.calibration && e.calibration !== "CALIBRATED"
+                  ? "Counting never started: calibration needs 3 slow squats first."
+                  : "Movements that did not pass the rep checks were not counted."
+                : `${reps - flagged} reps clean. Flags come from depth, trunk lean and range of motion.`}
+            </div>
+          </div>
+        </div>
+        <Split clean={reps - flagged} flagged={flagged} height={20} className="mt-3" />
+        <div className="lg-card mt-4">
+          <div className="flex justify-between lg-m lg-dim mb-2">
+            <span>Spine flexion over the session</span>
+            <span>Degrees</span>
+          </div>
+          <SpineTrace values={report.spine_history ?? []} />
+        </div>
       </div>
-
-      <div className="grid grid-cols-1 gap-6">
-        <Card className="p-5">
-          <p className="font-display text-base mb-3">Spine Flexion</p>
-          <TimelineChart data={report.spine_history ?? []} color="#16D97B" unit="°" />
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-5">
-          <p className="font-display text-base mb-3">Exercise Summary</p>
-          <dl className="space-y-2">
-            {Object.entries(report.exercise ?? {}).map(([k, v]) => (
-              <div key={k} className="flex justify-between text-sm">
-                <dt className="text-ink-faint font-mono">{k}</dt>
-                <dd className="text-ink tabular">{String(v)}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-
-        <Card className="p-5">
-          <p className="font-display text-base mb-3">Fatigue Summary</p>
-          <dl className="space-y-2">
-            {Object.entries(report.fatigue ?? {}).map(([k, v]) => (
-              <div key={k} className="flex justify-between text-sm">
-                <dt className="text-ink-faint font-mono">{k}</dt>
-                <dd className="text-ink tabular">{String(v)}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-
-        <RelatedSessionsFolder userId={report.user?.user_id} excludeSessionId={sessionId} />
-      </div>
-
-      {!isHistorical && (
-        <Card className="p-4">
-          <p className="text-xs text-ink-faint">
-            PDF/CSV export runs the same <code className="font-mono">export_data()</code> the
-            desktop app used — trigger it from the Export button on the Live Analysis page while
-            the session is running; files are written server-side.
+      <div className="flex flex-col gap-4">
+        <div className="lg-card">
+          <div className="lg-m lg-dim mb-2">Averages per rep</div>
+          {avgs.map(([a, b]) => (
+            <div key={a} className="lg-row flex items-center justify-between py-3">
+              <span style={{ fontSize: 16 }}>{a}</span>
+              <span className="lg-d" style={{ fontSize: 40 }}>
+                {b}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="lg-card" style={{ boxShadow: `inset 0 0 0 2px ${fat?.color ?? "var(--lg-line)"}` }}>
+          <div className="flex justify-between lg-m">
+            <span className="lg-dim">Fatigue indicator</span>
+            <span style={{ color: fat?.color ?? "var(--lg-faint)" }}>{fat?.text ?? "—"}</span>
+          </div>
+          <div className="flex items-end gap-2 mt-2">
+            <span className="lg-d" style={{ fontSize: 72, color: e.fatigueScore == null ? "var(--lg-faint)" : undefined }}>
+              {e.fatigueScore != null ? Math.round(e.fatigueScore) : "—"}
+            </span>
+            <span className="lg-m lg-dim pb-2">/ 100</span>
+          </div>
+          <p className="lg-dim mt-2" style={{ fontSize: 13 }}>
+            Drift in rep time, depth and trunk lean against your first reps. Higher means more drift.
           </p>
-        </Card>
-      )}
+        </div>
+        <div className="flex gap-2.5">
+          <Link href="/sessions" className="lg-btn g">
+            All sessions
+          </Link>
+          {!isHistorical && (
+            <Link href="/live" className="lg-btn g">
+              Back to live
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function ReportsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center gap-2 text-sm text-ink-faint font-mono py-10 justify-center">
-          <Loader2 size={15} className="animate-spin" /> Loading…
-        </div>
-      }
-    >
+    <Suspense fallback={null}>
       <ReportContent />
     </Suspense>
   );

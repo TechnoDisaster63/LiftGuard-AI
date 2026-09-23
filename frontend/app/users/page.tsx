@@ -2,123 +2,118 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { UserPlus, Users as UsersIcon } from "lucide-react";
 import { api, UserOut } from "@/lib/api";
-import { Card, CardEyebrow } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
-import MagicBento from "@/components/reactbits/MagicBento";
+import { useSessionRows } from "@/lib/history";
+import { Alert, Split, fmtDate, initialsOf } from "@/components/lg/ui";
 
-const QUICK_ACTIONS = [
-  { title: "Register User", description: "Enroll a new face via webcam", label: "Identity", href: "/register" },
-  { title: "Sessions", description: "Active and past sessions for everyone", label: "History", href: "/sessions" },
-  { title: "Hardware", description: "Connect or recalibrate the laser pointer", label: "Laser", href: "/hardware" },
-  { title: "Settings", description: "Session defaults for the next login", label: "Config", href: "/settings" },
-];
-
-function initialsOf(name: string) {
-  return name.split(" ").slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
+function RecentStrip({ user }: { user: UserOut }) {
+  const { rows } = useSessionRows({ userId: user.user_id, limit: 6 });
+  return (
+    <div className="lg-row grid items-center gap-3.5 py-3.5" style={{ gridTemplateColumns: "200px repeat(6, minmax(0,1fr))" }}>
+      <div style={{ fontSize: 16 }}>{user.display_name}</div>
+      {rows === null
+        ? Array.from({ length: 6 }).map((_, i) => <div key={i} className="lg-skel" style={{ height: 12 }} />)
+        : Array.from({ length: 6 }).map((_, i) => {
+            const r = rows[i];
+            if (!r) return <div key={i} />;
+            return (
+              <Link key={r.session_id} href={`/reports?history=${r.session_id}`} title={`${fmtDate(r.started_at)}: ${r.reps ?? 0} reps, ${r.flagged ?? 0} flagged`}>
+                <Split clean={(r.reps ?? 0) - (r.flagged ?? 0)} flagged={r.flagged ?? 0} height={12} />
+                <div className="lg-m lg-faint mt-1.5" style={{ fontSize: 10 }}>
+                  {r.reps ?? 0} reps
+                </div>
+              </Link>
+            );
+          })}
+    </div>
+  );
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserOut[]>([]);
+  const [users, setUsers] = useState<UserOut[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.users.list().then(setUsers).catch((e) => setError(e.message));
+    api.users
+      .list()
+      .then((u) => setUsers(u.filter((x) => !x.is_guest)))
+      .catch((e) => {
+        setUsers([]);
+        setError(e instanceof Error ? e.message : "Couldn't load users");
+      });
   }, []);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-ink-muted max-w-lg">
-          New users enroll via face capture — right here in the browser, no physical camera
-          rig required for registration itself.
-        </p>
-        <Link href="/register">
-          <Button variant="primary">
-            <UserPlus size={15} /> Register User
-          </Button>
-        </Link>
+    <div className="lg-fade">
+      <div className="lg-m lg-dim">People LiftGuard recognises at session start</div>
+      <div className="lg-d mt-1.5" style={{ fontSize: 92 }}>
+        {users === null ? "…" : `${users.length} enrolled`}
       </div>
-
       {error && (
-        <div className="rounded-control border border-risk-high/30 bg-risk-high/5 px-4 py-3 text-sm text-risk-high">
-          {error}
+        <div className="mt-4">
+          <Alert>{error}</Alert>
         </div>
       )}
-
-      {users.length === 0 && !error ? (
-        <Card>
-          <EmptyState
-            icon={<UsersIcon size={22} strokeWidth={1.5} />}
-            message="No users registered yet"
-            actionLabel="Register the first user"
-            actionHref="/register"
-          />
-        </Card>
-      ) : (
-        <Card className="p-0 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th className="px-5 py-3 font-mono text-[11px] uppercase tracking-wider text-ink-faint">
-                  User
-                </th>
-                <th className="px-5 py-3 font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+      <div className="grid gap-4 mt-6" style={{ gridTemplateColumns: "repeat(4, minmax(0,1fr))" }}>
+        {users === null &&
+          [0, 1, 2].map((i) => <div key={i} className="lg-skel" style={{ height: 280, borderRadius: 14 }} />)}
+        {users?.map((u) => (
+          <div key={u.user_id} className="lg-card" style={{ minHeight: 280 }}>
+            <div className="lg-d" style={{ fontSize: 120 }}>
+              {initialsOf(u.display_name)}
+            </div>
+            <div className="mt-3.5" style={{ fontSize: 22, fontWeight: 600 }}>
+              {u.display_name}
+            </div>
+            <div className="lg-m lg-faint mt-1">@{u.username}</div>
+            <div className="flex gap-7 mt-4">
+              <div>
+                <div className="lg-d" style={{ fontSize: 36 }}>
+                  {u.total_sessions}
+                </div>
+                <div className="lg-m lg-faint" style={{ fontSize: 10 }}>
                   Sessions
-                </th>
-                <th className="px-5 py-3 font-mono text-[11px] uppercase tracking-wider text-ink-faint">
-                  Last Seen
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {users.map((u, i) => (
-                <motion.tr
-                  key={u.user_id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.04 }}
-                  className="hover:bg-white/[0.02] transition-colors"
-                >
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-brand/15 border border-brand/25 grid place-items-center text-[11px] font-display text-brand shrink-0">
-                        {initialsOf(u.display_name)}
-                      </span>
-                      <div>
-                        <p className="text-ink">{u.display_name}</p>
-                        <p className="text-[11px] font-mono text-ink-faint">@{u.username}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-ink tabular">{u.total_sessions}</td>
-                  <td className="px-5 py-3 text-ink-muted font-mono text-xs">{u.last_seen ?? "—"}</td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-
-      <div>
-        <CardEyebrow className="mb-3">Quick Actions</CardEyebrow>
-        <MagicBento
-          cards={QUICK_ACTIONS}
-          variant="compact"
-          textAutoHide={false}
-          enableStars
-          enableSpotlight
-          enableBorderGlow
-          enableTilt={false}
-          enableMagnetism
-          particleCount={6}
-          spotlightRadius={220}
-          glowColor="124, 92, 255"
-        />
+                </div>
+              </div>
+              <div>
+                <div className="lg-d" style={{ fontSize: 36 }}>
+                  {fmtDate(u.last_seen, false)}
+                </div>
+                <div className="lg-m lg-faint" style={{ fontSize: 10 }}>
+                  Last seen
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        <div className="lg-card flex flex-col justify-end" style={{ minHeight: 280, background: "transparent", border: "2px dashed var(--lg-line)" }}>
+          <div className="lg-d" style={{ fontSize: 120, color: "var(--lg-faint)" }}>
+            +
+          </div>
+          <div className="mt-3.5" style={{ fontSize: 22, fontWeight: 600 }}>
+            Register someone
+          </div>
+          <div className="lg-dim mt-1.5" style={{ fontSize: 14 }}>
+            About 6 seconds in front of the webcam. Stored on this machine.
+          </div>
+          <Link href="/register" className="lg-btn mt-4 self-start">
+            Start face capture
+          </Link>
+        </div>
       </div>
+      {users && users.length > 0 && (
+        <div className="mt-8">
+          <div className="lg-m lg-dim mb-1.5">Last six sessions each · clean vs flagged reps</div>
+          {users.map((u) => (
+            <RecentStrip key={u.user_id} user={u} />
+          ))}
+        </div>
+      )}
+      {users?.length === 0 && !error && (
+        <p className="lg-dim mt-6" style={{ fontSize: 15 }}>
+          Nobody is enrolled yet, so every session is saved as Guest.
+        </p>
+      )}
     </div>
   );
 }

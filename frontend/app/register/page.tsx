@@ -2,12 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Camera, Check, RotateCcw, ArrowRight, AlertTriangle } from "lucide-react";
 import { api, UserRegisterResponse } from "@/lib/api";
-import { CaptureRing } from "@/components/register/CaptureRing";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { SparklesCore } from "@/components/ui/sparkles";
+import { Spinner } from "@/components/lg/ui";
 
 type Step = "name" | "preview" | "countdown" | "capturing" | "submitting" | "success" | "error";
 
@@ -175,115 +171,149 @@ export default function RegisterPage() {
     setStep("name");
   };
 
+  const cancel = () => {
+    stopCamera();
+    setErrorMsg(null);
+    setStep("name");
+  };
+
+  // Esc backs out of the camera steps.
+  useEffect(() => {
+    if (step !== "preview" && step !== "countdown") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  const expectedFrames = Math.floor(CAPTURE_DURATION_MS / CAPTURE_INTERVAL_MS);
+  const onCamera = step === "preview" || step === "countdown" || step === "capturing";
+  const frameColor =
+    step === "success" ? "var(--lg-mint)" : step === "error" ? "var(--lg-amber)" : step === "capturing" ? "var(--lg-ink)" : "var(--lg-line)";
+
   return (
-    <div className="max-w-md mx-auto">
-      {step === "name" && (
-        <Card className="p-8 animate-fade-slide-up">
-          <p className="font-display text-xl mb-1">Register a new user</p>
-          <p className="text-sm text-ink-muted mb-6">
-            Enrolls your face for automatic recognition at the start of live sessions — same
-            LBPH matching the desktop app uses, captured here instead of at the camera rig.
+    <div className="lg-fade">
+      {step === "name" ? (
+        <div className="max-w-3xl">
+          <div className="lg-m lg-dim">Register someone</div>
+          <div className="lg-d mt-1.5" style={{ fontSize: 92 }}>
+            Who&apos;s registering?
+          </div>
+          <p className="lg-dim mt-3" style={{ fontSize: 16, maxWidth: 560 }}>
+            Enrolls a face so LiftGuard recognises this person when a session starts. About 6 seconds in front of the webcam. Face samples stay on this machine.
           </p>
-          <label className="text-[11px] font-mono uppercase tracking-wider text-ink-faint">
-            Display Name
-          </label>
           <input
             autoFocus
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && displayName.trim() && startCamera()}
             placeholder="Jordan Lee"
-            className="mt-2 w-full bg-panel-raised border border-border rounded-control px-3 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-brand/40"
+            aria-label="Display name"
+            className="lg-input lg-d mt-8"
+            style={{ fontSize: 72 }}
           />
-          <Button variant="primary" onClick={startCamera} disabled={!displayName.trim()} className="mt-5 w-full justify-center">
-            <Camera size={16} /> Continue to Camera
-          </Button>
-        </Card>
-      )}
-
-      {(step === "preview" || step === "countdown" || step === "capturing") && (
-        <Card className="p-8 flex flex-col items-center animate-fade-slide-up">
-          <div className="relative w-80 h-80 rounded-full overflow-hidden glass-panel-raised scan-surface">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-full object-cover -scale-x-100"
-            />
+          <button className="lg-btn lg mt-8" onClick={startCamera} disabled={!displayName.trim()}>
+            Continue to camera <kbd>Enter</kbd>
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-7" style={{ gridTemplateColumns: "minmax(0,1.1fr) minmax(0,1fr)", minHeight: "calc(100vh - 150px)" }}>
+          <div className="relative rounded-[18px] overflow-hidden" style={{ background: "#0b0b0c", boxShadow: `inset 0 0 0 6px ${frameColor}`, transition: "box-shadow .2s ease" }}>
+            {onCamera && <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover -scale-x-100" style={{ padding: 6, borderRadius: 18 }} />}
+            {onCamera && (
+              <div
+                className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ width: 280, height: 360, borderRadius: "50%", border: `4px solid ${step === "capturing" ? "var(--lg-ink)" : "rgba(244,243,238,.35)"}` }}
+              />
+            )}
             {step === "countdown" && (
-              <div className="absolute inset-0 grid place-items-center bg-void/50">
-                <span className="font-display text-6xl text-brand tabular">{countdown || "Go"}</span>
+              <div className="absolute inset-0 grid place-items-center" style={{ background: "rgba(0,0,0,.45)" }}>
+                <span className="lg-d" style={{ fontSize: 260 }}>
+                  {countdown || "Go"}
+                </span>
               </div>
             )}
-            {step === "capturing" && <CaptureRing progress={progress} sampleCount={sampleCount} size={320} />}
+            {step === "capturing" && (
+              <div className="absolute left-0 right-0 bottom-0" style={{ height: 10, background: "rgba(0,0,0,.5)" }}>
+                <div style={{ height: "100%", width: `${progress * 100}%`, background: "var(--lg-ink)", transition: "width .25s linear" }} />
+              </div>
+            )}
+            {(step === "submitting" || step === "success" || step === "error") && (
+              <div className="absolute inset-0 grid place-items-center">
+                <span className="lg-d" style={{ fontSize: 140, color: frameColor }}>
+                  {step === "submitting" ? "…" : step === "success" ? "✓" : "!"}
+                </span>
+              </div>
+            )}
+            <span className="lg-chip lg-m absolute left-6 top-6" style={{ background: "rgba(0,0,0,.45)", color: "var(--lg-ink)" }}>
+              {step === "preview" ? "Centre your face in the oval" : step === "countdown" ? "Get ready" : step === "capturing" ? "Capturing · turn your head slowly" : step === "submitting" ? "Checking the samples" : step === "success" ? "Enrolled" : "Didn't work"}
+            </span>
           </div>
 
-          <p className="mt-6 text-sm text-ink-muted text-center max-w-xs">
-            {step === "preview" &&
-              "Center your face in the frame, then start capture. Slowly turn your head left and right once it begins."}
-            {step === "countdown" && "Get ready…"}
-            {step === "capturing" && "Hold steady — capturing samples"}
-          </p>
+          <div className="flex flex-col">
+            <div className="lg-m lg-dim">{step === "success" ? "Registered" : "Registering"}</div>
+            <div className="lg-d mt-1.5" style={{ fontSize: 88 }}>
+              {(result?.display_name ?? displayName).trim() || "—"}
+            </div>
 
-          {step === "preview" && (
-            <Button variant="primary" size="lg" onClick={beginCapture} className="mt-6">
-              Start Capture <ArrowRight size={15} />
-            </Button>
-          )}
-        </Card>
+            {step === "success" && result ? (
+              <>
+                <div className="lg-d mt-8" style={{ fontSize: 200, color: "var(--lg-mint)" }}>
+                  {result.samples_used}
+                  <span style={{ color: "var(--lg-faint)" }}>/{result.frames_received}</span>
+                </div>
+                <div className="lg-m lg-dim mt-3">Frames kept as face samples</div>
+                <div className="flex gap-3 mt-auto pt-8">
+                  <Link href="/live" className="lg-btn lg">
+                    Start a session
+                  </Link>
+                  <Link href="/users" className="lg-btn g lg">
+                    See everyone
+                  </Link>
+                </div>
+              </>
+            ) : step === "error" ? (
+              <>
+                <div className="lg-alert mt-8" style={{ fontSize: 16 }}>
+                  {errorMsg}
+                </div>
+                <div className="flex gap-3 mt-auto pt-8">
+                  <button className="lg-btn lg" onClick={retry}>
+                    Try again
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="lg-d mt-8" style={{ fontSize: 200, color: step === "capturing" ? "var(--lg-ink)" : "var(--lg-faint)" }}>
+                  {sampleCount}
+                  <span style={{ color: "var(--lg-faint)" }}>/{expectedFrames}</span>
+                </div>
+                <div className="lg-m lg-dim mt-3">Frames captured · the server keeps the ones with a face and needs at least 10</div>
+                {step === "submitting" && (
+                  <div className="lg-m mt-6 flex items-center gap-2.5">
+                    <Spinner /> Processing face samples
+                  </div>
+                )}
+                <div className="flex gap-3 mt-auto pt-8">
+                  {step === "preview" && (
+                    <button className="lg-btn lg" onClick={beginCapture}>
+                      Start capture
+                    </button>
+                  )}
+                  {(step === "preview" || step === "countdown") && (
+                    <button className="lg-btn g lg" onClick={cancel}>
+                      Cancel <kbd>Esc</kbd>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
-
-      {step === "submitting" && (
-        <Card className="p-10 flex flex-col items-center gap-4 animate-fade-slide-up">
-          <div className="w-10 h-10 border-2 border-brand/30 border-t-brand rounded-full animate-spin" />
-          <p className="text-sm text-ink-muted font-mono">Processing face samples…</p>
-        </Card>
-      )}
-
-      {step === "success" && result && (
-        <Card className="p-10 flex flex-col items-center gap-4 text-center animate-fade-slide-up relative overflow-hidden">
-          <div className="absolute inset-0 pointer-events-none">
-            <SparklesCore
-              background="transparent"
-              minSize={0.3}
-              maxSize={1}
-              particleDensity={70}
-              particleColor="#7C5CFF"
-              speed={2.5}
-              className="w-full h-full"
-            />
-          </div>
-          <div className="relative w-16 h-16 rounded-full bg-brand/10 border border-brand/30 grid place-items-center shadow-glow-brand">
-            <Check size={28} className="text-brand" />
-          </div>
-          <div className="relative">
-            <p className="font-display text-xl">{result.display_name} registered</p>
-            <p className="text-sm text-ink-muted mt-1">
-              {result.samples_used} of {result.frames_received} frames used as face samples
-            </p>
-          </div>
-          <div className="relative flex gap-3 mt-2">
-            <Link href="/users">
-              <Button variant="secondary">View Users</Button>
-            </Link>
-            <Link href="/live">
-              <Button variant="primary">Start a Session</Button>
-            </Link>
-          </div>
-        </Card>
-      )}
-
-      {step === "error" && (
-        <Card className="p-8 flex flex-col items-center gap-4 text-center animate-fade-slide-up">
-          <AlertTriangle size={28} className="text-risk-high" />
-          <p className="text-sm text-ink">{errorMsg}</p>
-          <Button variant="secondary" onClick={retry}>
-            <RotateCcw size={15} /> Try Again
-          </Button>
-        </Card>
-      )}
-
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
