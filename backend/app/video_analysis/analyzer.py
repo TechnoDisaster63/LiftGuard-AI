@@ -20,6 +20,28 @@ Landmarks = Mapping[str, Point]
 Detector = Callable[[np.ndarray], Landmarks | None]
 
 CONNECTIONS = (("shoulder", "hip"), ("hip", "knee"), ("knee", "ankle"))
+MEASUREMENT_KEYS = ("shoulder", "hip", "knee", "ankle")
+
+# MediaPipe Pose's 33 landmark names and its 35 skeleton connections
+# (mirrors mp.solutions.pose.PoseLandmark / POSE_CONNECTIONS in 0.10.x) so the
+# overlay can be drawn and tested without importing MediaPipe.
+POSE_LANDMARK_NAMES = (
+    "nose", "left_eye_inner", "left_eye", "left_eye_outer", "right_eye_inner",
+    "right_eye", "right_eye_outer", "left_ear", "right_ear", "mouth_left",
+    "mouth_right", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_pinky", "right_pinky", "left_index",
+    "right_index", "left_thumb", "right_thumb", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle", "left_heel",
+    "right_heel", "left_foot_index", "right_foot_index",
+)
+POSE_CONNECTIONS = (
+    (0, 1), (0, 4), (1, 2), (2, 3), (3, 7), (4, 5), (5, 6), (6, 8), (9, 10),
+    (11, 12), (11, 13), (11, 23), (12, 14), (12, 24), (13, 15), (14, 16),
+    (15, 17), (15, 19), (15, 21), (16, 18), (16, 20), (16, 22), (17, 19),
+    (18, 20), (23, 24), (23, 25), (24, 26), (25, 27), (26, 28), (27, 29),
+    (27, 31), (28, 30), (28, 32), (29, 31), (30, 32),
+)
+SKELETON_MIN_VISIBILITY = 0.5
 
 
 @dataclass(frozen=True)
@@ -59,10 +81,16 @@ class MediaPipePoseDetector:
         if not result.pose_landmarks:
             return None
         points = result.pose_landmarks.landmark
-        return {
+        landmarks = {
+            name: (points[idx].x, points[idx].y, points[idx].visibility)
+            for idx, name in enumerate(POSE_LANDMARK_NAMES)
+        }
+        # Measurement aliases used by the side-view squat calculations.
+        landmarks.update({
             name: (points[idx].x, points[idx].y, points[idx].visibility)
             for name, idx in self._indices.items()
-        }
+        })
+        return landmarks
 
     def close(self) -> None:
         self._pose.close()
@@ -127,15 +155,52 @@ def _fatigue(reps: Sequence[dict], baseline_reps: int) -> dict:
     }
 
 
+def _pixel(point: Point, width: int, height: int) -> tuple[int, int]:
+    return int(point[0] * width), int(point[1] * height)
+
+
+def _drawable(point: Point | None, min_visibility: float) -> bool:
+    return (
+        point is not None
+        and point[2] >= min_visibility
+        and -0.05 <= point[0] <= 1.05
+        and -0.05 <= point[1] <= 1.05
+    )
+
+
+def skeleton_segments(points: Landmarks, min_visibility: float = SKELETON_MIN_VISIBILITY) -> list[tuple[str, str]]:
+    """Full-body connections whose endpoints are both confidently visible."""
+    segments = []
+    for a, b in POSE_CONNECTIONS:
+        left, right = POSE_LANDMARK_NAMES[a], POSE_LANDMARK_NAMES[b]
+        if _drawable(points.get(left), min_visibility) and _drawable(points.get(right), min_visibility):
+            segments.append((left, right))
+    return segments
+
+
 def _draw(frame: np.ndarray, points: Landmarks | None, metrics: dict | None, rep_count: int) -> None:
     height, width = frame.shape[:2]
     if points:
+        # 1) Full MediaPipe skeleton, thin and neutral, visibility-gated so
+        #    low-confidence joints never draw ghost limbs.
+        for left, right in skeleton_segments(points):
+            cv2.line(frame, _pixel(points[left], width, height), _pixel(points[right], width, height),
+                     (235, 235, 235), 2, cv2.LINE_AA)
+        for name in POSE_LANDMARK_NAMES:
+            point = points.get(name)
+            if _drawable(point, SKELETON_MIN_VISIBILITY):
+                cv2.circle(frame, _pixel(point, width, height), 3, (160, 160, 160), -1, cv2.LINE_AA)
+        # 2) Measurement chain (shoulder-hip-knee-ankle) on top, thick and bright:
+        #    these are the joints behind every angle, rep and flag.
         for left, right in CONNECTIONS:
-            if left in points and right in points:
-                a, b = points[left], points[right]
-                cv2.line(frame, (int(a[0]*width), int(a[1]*height)), (int(b[0]*width), int(b[1]*height)), (0, 220, 255), 3)
-        for point in points.values():
-            cv2.circle(frame, (int(point[0]*width), int(point[1]*height)), 5, (0, 255, 120), -1)
+            if _drawable(points.get(left), 0.0) and _drawable(points.get(right), 0.0):
+                cv2.line(frame, _pixel(points[left], width, height), _pixel(points[right], width, height),
+                         (0, 220, 255), 6, cv2.LINE_AA)
+        for name in MEASUREMENT_KEYS:
+            point = points.get(name)
+            if _drawable(point, 0.0):
+                cv2.circle(frame, _pixel(point, width, height), 8, (0, 255, 120), -1, cv2.LINE_AA)
+                cv2.circle(frame, _pixel(point, width, height), 8, (20, 20, 20), 1, cv2.LINE_AA)
     text = f"Reps {rep_count}"
     if metrics:
         text += f" | knee {metrics['knee_angle']:.0f} | trunk {metrics['trunk_lean']:.0f}"
