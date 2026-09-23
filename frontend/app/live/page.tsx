@@ -127,7 +127,7 @@ export default function LivePage() {
       </div>
 
       <div className="space-y-4">
-        <CorrectionsFeed corrections={(telemetry?.corrections as never[]) ?? []} />
+        <CorrectionsFeed corrections={(telemetry?.corrections as never[]) ?? []} repFlags={lastRep?.form_flags ?? []} />
       </div>
 
       <ToastStack toasts={toasts} />
