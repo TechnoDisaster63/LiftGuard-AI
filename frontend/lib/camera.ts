@@ -80,3 +80,14 @@ export async function startWithCamera(
   }
   throw new Error(NO_CAMERA_MESSAGE);
 }
+
+export function rememberCamera(index: number) {
+  write(LAST_KEY, String(index));
+}
+
+/** The other cameras to try, in order, starting after the current one. */
+export function otherCameras(current: number): number[] {
+  const n = CAMERA_CANDIDATES.length;
+  const start = Math.max(0, CAMERA_CANDIDATES.indexOf(current));
+  return Array.from({ length: n - 1 }, (_, i) => CAMERA_CANDIDATES[(start + 1 + i) % n]).filter((c) => c !== current);
+}
