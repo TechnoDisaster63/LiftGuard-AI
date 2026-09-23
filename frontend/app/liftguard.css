@@ -95,6 +95,12 @@ body { font-family: var(--font-geist), system-ui, sans-serif; }
 }
 .lg-switch[aria-checked="true"] { background: var(--lg-mint); }
 .lg-switch[aria-checked="true"]::after { transform: translateX(28px); background: #0a0a0b; }
+/* Phone hero: "Help train LiftGuard" as a labelled button with its state. */
+.lg-show-sm { display: none; }
+.lg-contrib-btn { width: 100%; min-height: 52px; gap: 10px; justify-content: flex-start !important; }
+.lg-contrib-btn .lg-contrib-state { margin-left: auto; font-family: var(--font-mono, ui-monospace), monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--lg-dim); }
+.lg-contrib-btn.on { border-color: color-mix(in srgb, var(--lg-mint) 55%, transparent) !important; }
+.lg-contrib-btn.on .lg-contrib-state { color: var(--lg-mint); }
 .lg-switch:focus-visible { outline: 2px solid var(--lg-ink); outline-offset: 2px; }
 
 .lg-input { width: 100%; background: transparent; border: none; border-bottom: 2px solid var(--lg-line); color: var(--lg-ink); padding: 8px 0; outline: none; transition: border-color 0.15s ease; }
@@ -190,6 +196,7 @@ body { font-family: var(--font-geist), system-ui, sans-serif; }
    keep the depth bar and the controls clear of each other. */
 @media (max-width: 720px) {
   .lg-hide-sm { display: none !important; }
+  .lg-show-sm { display: flex !important; }
   .lg-stage-num { right: 40px; top: 16vh; font-size: min(62vh, 52vw); }
   .lg-stage-cue { right: 40px; top: 50vh; font-size: min(10vh, 13vw); }
   .lg-stage-sub { right: 40px; left: 14px; top: 58vh !important; }
