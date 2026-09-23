@@ -26,6 +26,31 @@ A mode flips to `validated = True` in `movements.py` only when all of these are 
 
 Push-up and lunge are waiting on step 1 (side-view clips). Jumping jacks is waiting on step 1 with a front-view clip.
 
+## Checking a recorded clip
+
+`backend/clip_check.py` runs step 1 of the release gate. It turns a video into a landmark fixture (landmarks only, no pixels), streams it through the mode's live counter the same way the app does, and compares the result with what was actually done.
+
+What to record (Techno's own recordings; trainer footage stays internal):
+
+| Mode | Camera | What to do |
+|---|---|---|
+| `pushup` | Side view, camera at floor height, whole body from head to feet in frame | 10 normal push-ups, then 1 with hips sagging and 1 shallow one. Say which reps were the faulty ones. |
+| `lunge` | Side view, whole body in frame | Stationary lunges (split squat, feet stay put): 10 normal, then 1 shallow and 1 leaning forward. |
+| `jumping_jacks` | Front view, facing the camera, whole body in frame | 15 normal jumping jacks, then 2 with arms only to shoulder height and 2 with feet barely apart. |
+
+Then, from `backend/`:
+
+```bash
+python clip_check.py extract pushup.mp4 --out tests/fixtures/clips/pushup_side.json.gz \
+    --description "Side-view push-ups, Techno, 12 reps"
+python clip_check.py check tests/fixtures/clips/pushup_side.json.gz --mode pushup --reps 12 \
+    --fault 11:HIPS_SAGGING --fault 12:SHALLOW_PUSHUP --save-expected
+```
+
+`check` prints each rep with its flags next to the expected ones and ends with `RESULT: PASS` or `RESULT: FAIL` (exit code 0 or 1). A pass needs the exact rep count, no flag on a normal rep, the expected flag on each faulty rep, and a pose in at least half the frames. `--save-expected` stores the expected result in the fixture; `tests/test_clip_check.py` re-checks every fixture in `tests/fixtures/clips/` on each pull request. If a clip fails, tune the thresholds in the mode's config and re-run; flip `validated` only when it passes.
+
+First run on the one real clip we have (front-view squats, 15 normal reps): the count is right (15) and none of the four coaching flags fire, but `LIMITED_DEPTH` fires on 11 of the 15 reps. Squat mode is built for a side view, and from the front the knee angle looks straighter than it is. This is why the demo stays side-view, and it is the kind of problem the clip check is there to catch.
+
 ## Recognizer hook
 
 The exercise recognizer (MM-Fit, 10 classes) only names the movement. Counting and every flag stay with the mode's own landmark rules, so a wrong or unsupported label cannot create a flag.
