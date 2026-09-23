@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <div className="min-h-screen flex flex-col">
           <TopNav />
-          <main className="flex-1 px-10 pt-6 pb-14">{children}</main>
+          <main className="lg-main flex-1 px-10 pt-6 pb-14">{children}</main>
           <footer
             className="fixed bottom-0 left-0 right-0 flex justify-between px-10 py-3 lg-m lg-faint pointer-events-none"
             style={{ fontSize: 10, background: "linear-gradient(0deg, var(--lg-bg) 55%, transparent)" }}

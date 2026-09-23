@@ -44,7 +44,7 @@ export function TopNav() {
       <Link href="/dashboard" className="lg-word mr-3">
         LIFTGUARD
       </Link>
-      <nav className="flex items-center gap-6">
+      <nav className="lg-navlinks flex items-center gap-6">
         {NAV.map(({ href, label }) => {
           const on = pathname.startsWith(href);
           return (
@@ -54,7 +54,7 @@ export function TopNav() {
           );
         })}
       </nav>
-      <div className="ml-auto flex items-center gap-2.5">
+      <div className="lg-navchips ml-auto flex items-center gap-2.5">
         <span className="lg-chip lg-m" title="Backend health, checked every 10 s">
           <span className="lg-dot" style={{ background: online === null ? "var(--lg-faint)" : online ? "var(--lg-mint)" : "var(--lg-amber)" }} />
           {online === null ? "Checking backend" : online ? "Backend online" : "Backend offline"}

@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { otherCameras, rememberCamera, startWithCamera } from "@/lib/camera";
 import { useLiveSession, type TelemetryPayload } from "@/lib/ws";
 import { unlockVoice, useVoiceCues, useVoiceSetting } from "@/lib/voice";
-import { openDeviceCamera, stopDeviceCamera, useFrameUplink } from "@/lib/deviceCamera";
+import { countVideoInputs, defaultFacing, flipDeviceCamera, openDeviceCamera, rememberFacing, stopDeviceCamera, streamFacing, useFrameUplink, type Facing } from "@/lib/deviceCamera";
 import { Alert, FLAG_CUE, Spinner } from "@/components/lg/ui";
 
 type StageState = "idle" | "counting" | "clean" | "flagged" | "fatigue";
@@ -80,6 +80,12 @@ function LiveInner() {
     }
   }, [sessionId, starting, deviceStream]);
   useEffect(() => () => stopDeviceCamera(deviceStreamRef.current), []);
+  // Which way the device camera faces, and whether there is another to flip to.
+  const [deviceFacing, setDeviceFacing] = useState<Facing>("user");
+  const [deviceCams, setDeviceCams] = useState(0);
+  useEffect(() => {
+    if (deviceStream) void countVideoInputs().then(setDeviceCams);
+  }, [deviceStream]);
   // One-tap camera switch: cycle to the next camera that actually sends video.
   const [camStatus, setCamStatus] = useState<{ text: string; busy: boolean; tone?: "ok" | "warn" } | null>(null);
   const switchingRef = useRef(false);
@@ -109,6 +115,29 @@ function LiveInner() {
     }
     setTimeout(() => setCamStatus((s) => (s && !s.busy ? null : s)), 3000);
   }, [telemetry?.camera_id, requestControl]);
+
+  // Device mode: back <-> front camera on this phone or laptop.
+  const flipDevice = useCallback(async () => {
+    const current = deviceStreamRef.current;
+    if (switchingRef.current || !current) return;
+    switchingRef.current = true;
+    setCamStatus({ text: "Switching camera", busy: true });
+    try {
+      const { stream, facing } = await flipDeviceCamera(current, deviceFacing);
+      setDeviceStream(stream);
+      setDeviceFacing(facing);
+      rememberFacing(facing);
+      setCamStatus({ text: facing === "environment" ? "Back camera" : "Front camera", busy: false, tone: "ok" });
+    } catch (e) {
+      const back = (e as { stream?: MediaStream }).stream;
+      if (back) setDeviceStream(back);
+      setCamStatus({ text: back ? "No other camera found · staying on this one" : "Camera lost · stop and start again", busy: false, tone: "warn" });
+    } finally {
+      switchingRef.current = false;
+    }
+    setTimeout(() => setCamStatus((s) => (s && !s.busy ? null : s)), 3000);
+  }, [deviceFacing]);
+  const changeCamera = useCallback(() => void (deviceMode ? flipDevice() : switchCamera()), [deviceMode, flipDevice, switchCamera]);
 
   const handleStart = useCallback(async () => {
     if (starting || sessionId) return;
@@ -140,7 +169,9 @@ function LiveInner() {
     let stream: MediaStream | null = null;
     try {
       setTrying("Asking for camera permission");
-      stream = await openDeviceCamera();
+      const facing = defaultFacing();
+      stream = await openDeviceCamera({ facing });
+      setDeviceFacing(streamFacing(stream) ?? facing);
       setTrying("Camera on · starting the analysis");
       const res = await api.sessions.start({ camera_id: "browser", voice_enabled: false });
       setDeviceStream(stream);
@@ -272,27 +303,27 @@ function LiveInner() {
       else if (k === "m") sendControl("toggle_mirror");
       else if (k === "c") sendControl(manualCal ? "complete_calibration" : "start_calibration");
       else if (k === "r") sendControl("reset_reps");
-      else if (k === "k" && !deviceMode) void switchCamera();
+      else if (k === "k") changeCamera();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal, switchCamera, deviceMode, toggleVoice]);
+  }, [sessionId, starting, handleStart, handleStop, sendControl, manualCal, changeCamera, toggleVoice]);
 
   // ---------------- READY (no session) ----------------
   if (!sessionId && !starting) {
     return (
-      <div className="lg-fade grid gap-6" style={{ gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr)", minHeight: "calc(100vh - 150px)" }}>
-        <div className="relative rounded-[18px] overflow-hidden flex flex-col justify-end p-9" style={{ background: "radial-gradient(120% 90% at 20% 10%, #1c1c20, #0b0b0c)" }}>
+      <div className="lg-ready lg-fade grid gap-6" style={{ gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr)", minHeight: "calc(100vh - 150px)" }}>
+        <div className="lg-ready-hero relative rounded-[18px] overflow-hidden flex flex-col justify-end p-9" style={{ background: "radial-gradient(120% 90% at 20% 10%, #1c1c20, #0b0b0c)" }}>
           <div style={{ fontSize: 26, fontWeight: 600, maxWidth: 560, lineHeight: 1.2 }}>Real-time movement analysis for injury prevention.</div>
           <div className="lg-m lg-dim mt-2.5">Movement mode: squat · watches depth, trunk lean, range of motion</div>
           <div className="lg-d mt-3" style={{ fontSize: "clamp(120px, 17vw, 240px)" }}>
             Ready
           </div>
-          <div className="flex gap-3 mt-5">
+          <div className="lg-ready-actions flex flex-wrap gap-3 mt-5">
             <button className="lg-btn lg" onClick={handleStart}>
               Start session <kbd>Space</kbd>
             </button>
-            <button className="lg-btn" onClick={handleStartDevice}>
+            <button className="lg-btn lg-start-device" onClick={handleStartDevice}>
               Use this device&apos;s camera
             </button>
           </div>
@@ -372,35 +403,35 @@ function LiveInner() {
       <div className="lg-stage-shade" />
       <div className="lg-stage-frame" key={stage === "clean" ? `c${lastRepNo}` : stage} />
 
-      <div className="absolute left-10 right-10 top-8 flex items-center gap-4">
+      <div className="lg-stage-top absolute left-10 right-10 top-8 flex flex-wrap items-center gap-4">
         <span className="lg-word">LIFTGUARD</span>
         <span className="lg-chip lg-m" style={glass}>
           <span className="lg-dot" style={{ background: connecting ? "var(--lg-faint)" : "#FF5A1F" }} />
           {connecting ? "Connecting camera" : deviceMode ? "Live · this device's camera" : "Live · camera found"}
         </span>
-        {!deviceMode && (
+        {(!deviceMode || deviceCams !== 1) && (
         <button
           className="lg-chip lg-m"
           style={{ ...glass, color: camStatus?.tone === "ok" ? "var(--lg-mint)" : camStatus?.tone === "warn" ? "var(--lg-amber)" : undefined }}
-          onClick={() => void switchCamera()}
+          onClick={changeCamera}
           disabled={connecting || stopping || !!camStatus?.busy}
           aria-live="polite"
         >
           {camStatus?.busy && <Spinner />}
-          {camStatus ? camStatus.text : "Switch camera"} {!camStatus && <span style={{ opacity: 0.6 }}>K</span>}
+          {camStatus ? camStatus.text : deviceMode ? "Flip camera" : "Switch camera"} {!camStatus && <span className="lg-keyhint" style={{ opacity: 0.6 }}>K</span>}
         </button>
         )}
-        <span className="lg-chip lg-m" style={glass}>
+        <span className="lg-chip lg-m lg-hide-sm" style={glass}>
           Movement analysis · Squat mode
         </span>
         <button className="lg-chip lg-m" style={glass} onClick={() => setMenuOpen((m) => !m)} disabled={stopping}>
-          Menu <span style={{ opacity: 0.6 }}>Esc</span>
+          Menu <span className="lg-keyhint" style={{ opacity: 0.6 }}>Esc</span>
         </button>
         <span className="lg-m ml-auto" style={{ color: "var(--lg-c)", fontSize: 12, fontWeight: 500 }} aria-live="polite">
           {stateLabel}
         </span>
       </div>
-      <div className="absolute left-10 lg-m" style={{ top: 62, fontSize: 10, color: "rgba(244,243,238,.45)" }}>
+      <div className="lg-stage-disclaimer absolute left-10 lg-m" style={{ top: 62, fontSize: 10, color: "rgba(244,243,238,.45)" }}>
         Not a medical diagnosis
       </div>
 
@@ -417,7 +448,13 @@ function LiveInner() {
             {manualCal ? "Recalibrating" : <>Do 3 slow<br />squats</>}
           </div>
           <div className="lg-m lg-stage-sub" style={{ top: "62vh" }}>
-            {manualCal ? "Press C again to finish" : "Learning your depth · counting starts after"}
+            {manualCal ? (
+              <button className="lg-btn" onClick={() => sendControl("complete_calibration")}>
+                Finish calibration <kbd>C</kbd>
+              </button>
+            ) : (
+              "Learning your depth · counting starts after"
+            )}
           </div>
         </>
       ) : (
@@ -451,13 +488,13 @@ function LiveInner() {
           <div className="lg-depth" role="img" aria-label={`Depth ${Math.round(depthPct)}% of your calibrated bottom`}>
             <i style={{ height: `${depthPct}%` }} />
           </div>
-          <div className="absolute lg-m" style={{ right: 44, top: "79vh", width: 36, textAlign: "center", fontSize: 10 }}>
+          <div className="lg-depth-label absolute lg-m" style={{ right: 44, top: "79vh", width: 36, textAlign: "center", fontSize: 10 }}>
             Depth
           </div>
         </>
       )}
 
-      <div className="absolute left-10 right-10 flex items-end gap-7" style={{ bottom: 30 }}>
+      <div className="lg-stage-bottom absolute left-10 right-10 flex flex-wrap items-end gap-7" style={{ bottom: 30 }}>
         <div>
           <div className="lg-m mb-2" style={{ color: "rgba(244,243,238,.6)" }}>
             This session
@@ -474,7 +511,7 @@ function LiveInner() {
             <div className="lg-tile n" />
           </div>
         </div>
-        <div style={{ minWidth: 220 }}>
+        <div className="lg-stage-fatigue" style={{ minWidth: 220 }}>
           <div className="lg-m" style={{ color: "rgba(244,243,238,.6)" }}>
             Fatigue indicator
           </div>
@@ -482,27 +519,30 @@ function LiveInner() {
             {st.fatigueScore != null ? `${Math.round(st.fatigueScore)} · ${(st.fatigueStatus ?? "").toLowerCase()}` : "needs more reps"}
           </div>
         </div>
-        <div className="ml-auto flex gap-3.5 lg-m" style={{ color: "rgba(244,243,238,.75)" }}>
-          {[
-            ["Space", "Stop"],
-            ["V", voiceOn ? "Voice on" : "Voice off"],
-            ["M", "Mirror"],
-            ["C", manualCal ? "Finish cal" : "Calibrate"],
-            ["R", "Reset"],
-          ].map(([k, v]) => (
-            <span key={k}>
-              <span className="lg-kbd mr-1.5">{k}</span>
+        {/* Each shortcut is also a button: phones have no keyboard. */}
+        <div className="lg-stage-keys ml-auto flex flex-wrap gap-2 lg-m" style={{ color: "rgba(244,243,238,.75)" }} role="toolbar" aria-label="Session controls">
+          {(
+            [
+              ["Space", "Stop", handleStop],
+              ["V", voiceOn ? "Voice on" : "Voice off", toggleVoice],
+              ["M", telemetry?.mirror_mode ? "Mirror on" : "Mirror off", () => sendControl("toggle_mirror")],
+              ["C", manualCal ? "Finish cal" : "Calibrate", () => sendControl(manualCal ? "complete_calibration" : "start_calibration")],
+              ["R", "Reset", () => sendControl("reset_reps")],
+            ] as [string, string, () => void][]
+          ).map(([k, v, act]) => (
+            <button key={k} className="lg-keybtn" onClick={act} disabled={stopping || connecting}>
+              <span className="lg-kbd lg-keyhint mr-1.5">{k}</span>
               {v}
-            </span>
+            </button>
           ))}
         </div>
       </div>
 
       {menuOpen && sessionId && !stopping && (
-        <LiveMenu telemetry={telemetry} deviceMode={deviceMode} voiceOn={voiceOn} onAction={(a) => (a === "toggle_voice" ? toggleVoice() : sendControl(a))} onStop={handleStop} onClose={() => setMenuOpen(false)} />
+        <LiveMenu telemetry={telemetry} deviceMode={deviceMode} voiceOn={voiceOn} onAction={(a) => (a === "toggle_voice" ? toggleVoice() : a === "flip_device" ? void flipDevice() : sendControl(a))} onStop={handleStop} onClose={() => setMenuOpen(false)} />
       )}
 
-      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2" style={{ bottom: 110 }} aria-live="polite">
+      <div className="lg-stage-toasts absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2" style={{ bottom: 110 }} aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className="lg-chip lg-fade" style={{ background: "rgba(0,0,0,.75)", color: t.tone === "error" ? "var(--lg-amber)" : "var(--lg-ink)", borderColor: "rgba(255,255,255,.2)", fontSize: 14 }}>
             {t.text}
@@ -522,6 +562,7 @@ function LiveMenu({ telemetry, deviceMode, voiceOn, onAction, onStop, onClose }:
     { label: "Mirror camera", value: telemetry?.mirror_mode ? "On" : "Off", action: "toggle_mirror", key: "M" },
     { label: "Recalibrate depth", value: telemetry?.calibration_mode ? "Finish" : "Start", action: telemetry?.calibration_mode ? "complete_calibration" : "start_calibration", key: "C" },
     { label: "Reset rep count", value: "Reset", action: "reset_reps", key: "R" },
+    ...(deviceMode ? [{ label: "Flip camera (back / front)", value: "Flip", action: "flip_device", key: "K" }] : []),
     { label: "Laser pointer", value: laser ? "Turn off" : "Not found · try USB", action: "toggle_arduino", muted: !laser },
     { label: "Skip more frames (lighter on CPU)", value: `Every ${every}`, action: "speed_up" },
     { label: "Skip fewer frames (smoother)", value: `Every ${every}`, action: "speed_down" },
@@ -529,7 +570,7 @@ function LiveMenu({ telemetry, deviceMode, voiceOn, onAction, onStop, onClose }:
   ];
   return (
     <div className="absolute inset-0 z-10 grid place-items-center lg-fade" style={{ background: "rgba(0,0,0,.72)" }} onClick={onClose}>
-      <div className="lg-card" style={{ width: 580, background: "#111113" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Session menu">
+      <div className="lg-card" style={{ width: 580, maxWidth: "94vw", maxHeight: "90vh", overflowY: "auto", background: "#111113" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Session menu">
         <div className="flex items-center justify-between mb-3">
           <div className="lg-d" style={{ fontSize: 44 }}>
             Menu
@@ -545,7 +586,7 @@ function LiveMenu({ telemetry, deviceMode, voiceOn, onAction, onStop, onClose }:
               <span className="lg-m" style={{ color: r.muted ? "var(--lg-faint)" : "var(--lg-dim)" }}>
                 {r.value}
               </span>
-              {r.key && <span className="lg-kbd">{r.key}</span>}
+              {r.key && <span className="lg-kbd lg-keyhint">{r.key}</span>}
             </span>
           </button>
         ))}
