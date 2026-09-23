@@ -13,7 +13,8 @@ function jsonHeaders(): HeadersInit {
 }
 
 export interface SessionStartRequest {
-  camera_id?: number;
+  // "browser": the viewer's own device camera, streamed from the live page.
+  camera_id?: number | "browser";
   voice_enabled?: boolean;
   arduino_enabled?: boolean;
   model_complexity?: number;
@@ -35,7 +36,7 @@ export interface SessionReport {
   spine_history: number[];
   using_temporal: boolean;
   using_iri_v2: boolean;
-  camera_id: number;
+  camera_id: number | string;
   iri?: Record<string, unknown>;
   uncertainty?: Record<string, unknown>;
 }

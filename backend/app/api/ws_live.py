@@ -9,6 +9,7 @@ etc.) arrive the same way keyboard shortcuts used to.
 """
 import asyncio
 import base64
+import binascii
 import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -48,6 +49,17 @@ async def ws_live(websocket: WebSocket, session_id: str):
                 raw = await websocket.receive_text()
                 try:
                     msg = json.loads(raw)
+                    # Browser camera: {"type": "frame", "data": <base64 JPEG>}.
+                    # No reply per frame; the analysed frame going back out
+                    # is the acknowledgement.
+                    if isinstance(msg, dict) and msg.get("type") == "frame":
+                        data = msg.get("data")
+                        if isinstance(data, str) and len(data) <= MAX_FRAME_B64_CHARS:
+                            try:
+                                manager.push_browser_frame(base64.b64decode(data, validate=True))
+                            except (binascii.Error, ValueError):
+                                pass  # one bad frame; the next one replaces it
+                        continue
                     # handle_control() can block briefly (e.g. connecting to
                     # a laser) — run it off the event loop so it doesn't
                     # stall frame delivery to this or other sessions.
@@ -95,10 +107,15 @@ async def ws_live(websocket: WebSocket, session_id: str):
             if jpeg_bytes is None:
                 if not manager.active:
                     break
-                if loop.time() - last_frame_at > NO_FRAME_TIMEOUT_S:
+                browser = _uses_browser_camera(manager)
+                timeout = BROWSER_NO_FRAME_TIMEOUT_S if browser else NO_FRAME_TIMEOUT_S
+                if loop.time() - last_frame_at > timeout:
                     source = getattr(manager, "camera_id", None)
                     message = (
-                        "The video file finished." if isinstance(source, str) and not source.isdigit()
+                        "This browser stopped sending camera video (the tab was hidden, "
+                        "or the camera was turned off). Start the session again."
+                        if browser
+                        else "The video file finished." if isinstance(source, str) and not source.isdigit()
                         else "The camera stopped sending video (unplugged, or taken by another app). "
                         "Stop the session and start it again."
                     )
@@ -133,6 +150,16 @@ async def ws_live(websocket: WebSocket, session_id: str):
 
 
 NO_FRAME_TIMEOUT_S = 3.0
+# A browser camera needs longer: the first frame waits for the socket to
+# open, and a phone on mobile data can stall for a few seconds.
+BROWSER_NO_FRAME_TIMEOUT_S = 10.0
+# base64 of the 2 MB frame cap in core/browser_camera.py.
+MAX_FRAME_B64_CHARS = 2 * 1024 * 1024 * 4 // 3 + 4
+
+
+def _uses_browser_camera(manager) -> bool:
+    check = getattr(manager, "uses_browser_camera", None)
+    return bool(check()) if callable(check) else False
 
 
 async def _send_stream_error(websocket: WebSocket, message: str) -> None:

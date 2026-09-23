@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any, Literal, Optional, Union
 from pydantic import BaseModel
 
 
 class SessionStartRequest(BaseModel):
     """All fields optional — anything omitted falls back to the current
     values in /api/settings (session_defaults), not a hardcoded default."""
-    camera_id: Optional[int] = None
+    # A camera index on the backend machine, or "browser": the viewer's own
+    # device camera, streamed from the live page over the WebSocket.
+    camera_id: Optional[Union[int, Literal["browser"]]] = None
     voice_enabled: Optional[bool] = None
     arduino_enabled: Optional[bool] = None
     model_complexity: Optional[int] = None
@@ -28,6 +30,7 @@ class SessionReport(BaseModel):
     spine_history: list[float] = []
     using_temporal: bool = False
     using_iri_v2: bool = False
-    camera_id: int = 0
+    # A camera index, a clip path / stream URL, or "browser".
+    camera_id: Union[int, str] = 0
     iri: Optional[dict[str, Any]] = None
     uncertainty: Optional[dict[str, Any]] = None

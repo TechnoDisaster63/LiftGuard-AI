@@ -163,6 +163,18 @@ export function useLiveSession(sessionId: string | null) {
     }
   }, []);
 
+  /**
+   * Send one camera frame (base64 JPEG) for a browser-camera session.
+   * Skipped while the socket is backed up, so a slow link drops frames
+   * instead of building a delay. Returns whether it was sent.
+   */
+  const sendFrame = useCallback((jpegBase64: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > 256 * 1024) return false;
+    ws.send(JSON.stringify({ type: "frame", data: jpegBase64 }));
+    return true;
+  }, []);
+
   /** Send a control and wait for the backend's answer (no toast). Rejects after timeoutMs. */
   const requestControl = useCallback((action: string, timeoutMs = 10000) => {
     return new Promise<string>((resolve, reject) => {
@@ -183,5 +195,5 @@ export function useLiveSession(sessionId: string | null) {
     });
   }, []);
 
-  return { frameUrl, telemetry, state, sendControl, requestControl, toasts, fatalError };
+  return { frameUrl, telemetry, state, sendControl, sendFrame, requestControl, toasts, fatalError };
 }

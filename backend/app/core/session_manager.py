@@ -90,11 +90,18 @@ CAMERA_HELP = (
 )
 
 
+from .browser_camera import BrowserFrameSource, is_browser_source
+
+
 def camera_source(camera_id):
     """LIFTGUARD_CAMERA_SOURCE (a video file path or stream URL) overrides the
     numeric camera id. Used for testing with a recorded clip and for IP cameras."""
     import os
 
+    # The viewer chose their own device camera: a server-side clip or IP
+    # camera override must not replace it.
+    if is_browser_source(camera_id):
+        return camera_id
     override = os.getenv("LIFTGUARD_CAMERA_SOURCE", "").strip()
     return override or camera_id
 
@@ -204,13 +211,19 @@ class SessionManager:
 
         source = camera_source(camera_id)
         self.camera_id = source
-        self.cap, _ = open_camera(source)
+        if is_browser_source(source):
+            # Frames arrive later over the WebSocket (push_browser_frame);
+            # there is nothing to open or warm up here.
+            self.cap = BrowserFrameSource()
+        else:
+            self.cap, _ = open_camera(source)
         camera_id = source
 
         # Squat counter timing: a video file has a real fps; a webcam's
         # nominal fps is not the processing rate, so let the engine measure it.
+        # The same goes for a browser camera.
         source_fps = None
-        if isinstance(camera_id, str) and not camera_id.isdigit():
+        if isinstance(camera_id, str) and not camera_id.isdigit() and not is_browser_source(camera_id):
             source_fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 0) or None
             # open_camera consumed one frame; rewind a file so no clip frame is lost.
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -236,6 +249,8 @@ class SessionManager:
             # desktop for cv2.imshow. Enrolled users are matched; otherwise
             # the session starts as Guest. A video file source skips face ID
             # so no frames of the clip are consumed before analysis.
+            # A browser camera has sent no frames yet at this point, so it
+            # starts as Guest too.
             is_file = isinstance(camera_id, str) and not camera_id.isdigit()
             self.engine.current_user = self.engine.user_manager.identify_from_camera(
                 self.cap, timeout=0.0 if is_file else 8.0,
@@ -247,6 +262,17 @@ class SessionManager:
                 )
             if not getattr(self.engine.current_user, "is_guest", True):
                 self.engine.user_manager.start_session(self.engine.current_user.user_id)
+
+    def push_browser_frame(self, jpeg: bytes) -> bool:
+        """Hand one JPEG from the viewer's browser to the analysis loop.
+        Ignored (False) unless this session uses the browser camera."""
+        cap = self.cap
+        if not self.active or not isinstance(cap, BrowserFrameSource):
+            return False
+        return cap.push(jpeg)
+
+    def uses_browser_camera(self) -> bool:
+        return isinstance(self.cap, BrowserFrameSource)
 
     def stop(self):
         self.active = False

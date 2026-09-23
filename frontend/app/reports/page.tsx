@@ -136,7 +136,7 @@ function ReportContent() {
           </div>
           <div style={{ paddingBottom: 18 }}>
             <div className="lg-m lg-dim">
-              Squat reps · {startedAt ? fmtDate(startedAt) : isHistorical ? "saved" : "live now"} · {who} · camera {report.camera_id}
+              Squat reps · {startedAt ? fmtDate(startedAt) : isHistorical ? "saved" : "live now"} · {who} · {cameraLabel(report.camera_id)}
             </div>
             <div className="lg-d mt-2" style={{ fontSize: 64, color: reps === 0 ? "var(--lg-faint)" : flagged ? "var(--lg-amber)" : "var(--lg-mint)" }}>
               {reps === 0 ? "No reps counted" : flagged ? `${flagged} flagged` : "All clean"}
@@ -207,4 +207,13 @@ export default function ReportsPage() {
       <ReportContent />
     </Suspense>
   );
+}
+
+// -1 (saved sessions) and "browser" (live report) both mean the viewer's own
+// device camera; a clip or stream path is shown as "video file".
+function cameraLabel(id: unknown): string {
+  if (id === -1 || id === "browser") return "this device's camera";
+  if (typeof id === "number") return `camera ${id}`;
+  if (typeof id === "string" && id !== "" && !/^\d+$/.test(id)) return "video file";
+  return `camera ${String(id ?? 0)}`;
 }
