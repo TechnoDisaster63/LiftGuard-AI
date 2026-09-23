@@ -117,6 +117,9 @@ try:
 except ImportError:
     print("⚠️  exercise_tracker.py not found")
  
+# ── Calibrated squat counter (shared with offline analysis) ──
+from ..video_analysis.live import LiveSquatFeed
+
 # ── Arduino Controller ───────────────────────────────────────
 ARDUINO_AVAILABLE = False
 try:
@@ -844,7 +847,7 @@ class LiftGuardAI:
             'disclaimer': 'IRI is not a medical diagnosis'
         }
         self.current_exercise_status = {
-            'rep_count': 0, 'exercise': 'Unknown', 'phase_display': '🧍'
+            'rep_count': 0, 'exercise': 'Detecting squat...', 'phase_display': '', 'phase': 'idle'
         }
         self.current_features    = None
         self.current_corrections = []
@@ -852,6 +855,13 @@ class LiftGuardAI:
         self.cached_results       = None
         self.cached_landmarks     = None
         self.cached_landmarks_raw = None
+
+        # Rep counting for the live path. The legacy ExerciseTracker still
+        # runs (its status is kept under 'legacy_tracker'), but reps, phase
+        # and exercise now come from the calibrated squat counter used by the
+        # offline analyzer. SessionManager passes the source fps for video
+        # files; for a webcam the feed measures the processing rate.
+        self.live_squat = LiveSquatFeed()
  
         self.feedback_message = "Stand in front of camera"
         self.feedback_color   = (255, 255, 255)
@@ -1074,6 +1084,9 @@ class LiftGuardAI:
                 if self.arduino_connected:
                     self.arduino.update_frame(frame, None)
  
+        if should_process:
+            self._update_live_squat(w / h if h else None)
+
         if self.frame_count % 10 == 0:
             self._handle_voice()
         if self.frame_count % 5 == 0:
@@ -1090,6 +1103,21 @@ class LiftGuardAI:
         self.frame_times.append(time.time() - start_time)
         return output
  
+    def configure_live_squat(self, source_fps=None):
+        """Reset the squat counter. ``source_fps`` is the video file's fps
+        (None for a webcam, where the processing rate is measured)."""
+        fps = source_fps / self.process_every_n if source_fps else None
+        self.live_squat = LiveSquatFeed(fps=fps)
+        self.current_exercise_status = LiveSquatFeed.warming_status()
+
+    def _update_live_squat(self, aspect):
+        # A frame without a usable pose is still a frame: feeding None keeps
+        # the counter's clock aligned with the video.
+        status = self.live_squat.update(self.cached_landmarks_raw, aspect)
+        legacy = self.current_exercise_status.get('legacy_tracker') if isinstance(
+            self.current_exercise_status, dict) else None
+        self.current_exercise_status = {**status, 'legacy_tracker': legacy}
+
     def _clear_pose_cache(self):
         self.cached_results       = None
         self.cached_landmarks     = None
@@ -1140,11 +1168,14 @@ class LiftGuardAI:
         )
  
         # Exercise tracker
-        self.current_exercise_status = self.exercise_tracker.update(
+        legacy_status = self.exercise_tracker.update(
             self.current_features,
             self.current_risk_result,
             self.current_fatigue_status
         )
+        self.current_exercise_status = {
+            **(self.current_exercise_status or {}), 'legacy_tracker': legacy_status
+        }
  
         # Session history
         iri_val = self.current_injury_risk.get(
@@ -2178,6 +2209,8 @@ class LiftGuardAI:
  
     def reset_reps(self):
         self.exercise_tracker.reset()
+        self.live_squat.reset()
+        self.current_exercise_status = LiveSquatFeed.warming_status()
         print("\n🔄 Reps reset")
         if self.voice_enabled:
             self.speaker.speak_now("Reps reset")

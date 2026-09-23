@@ -64,6 +64,13 @@ class SessionManager:
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
+        # Squat counter timing: a video file has a real fps; a webcam's
+        # nominal fps is not the processing rate, so let the engine measure it.
+        source_fps = None
+        if isinstance(camera_id, str) and not camera_id.isdigit():
+            source_fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 0) or None
+        self.engine.configure_live_squat(source_fps)
+
         # Same face-ID call as the desktop run(). Blocking is acceptable -
         # start() runs once, off the per-frame loop.
         if hasattr(self.engine, "user_manager"):
