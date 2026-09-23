@@ -31,13 +31,51 @@ UNVALIDATED_TELEMETRY_OFF = {
 }
 
 
+def _live_reps(engine) -> list:
+    feed = getattr(engine, "live_squat", None)
+    counter = getattr(feed, "counter", None)
+    return list(counter.machine.reps) if counter is not None else []
+
+
 def live_fatigue_indicator(engine) -> dict:
     from ..video_analysis.analyzer import AnalysisConfig, _fatigue
 
-    feed = getattr(engine, "live_squat", None)
-    counter = getattr(feed, "counter", None)
-    reps = counter.machine.reps if counter is not None else []
-    return _fatigue(reps, AnalysisConfig().baseline_reps)
+    return _fatigue(_live_reps(engine), AnalysisConfig().baseline_reps)
+
+
+def live_exercise_summary(engine) -> dict:
+    """Session exercise summary from the calibrated squat counter.
+
+    Flat scalars so the report page's key/value list renders them directly.
+    """
+    reps = _live_reps(engine)
+    status = getattr(engine, "current_exercise_status", None) or {}
+    gates = status.get("rep_gates") or {}
+
+    def avg(key):
+        return round(sum(r[key] for r in reps) / len(reps), 2) if reps else None
+
+    return {
+        "exercise": "Squat" if reps else "No squat reps counted",
+        "total_reps": len(reps),
+        "reps_with_form_flags": sum(bool(r.get("form_flags")) for r in reps),
+        "avg_rep_seconds": avg("duration_seconds"),
+        "avg_deepest_knee_angle_deg": avg("min_knee_angle"),
+        "avg_range_of_motion_deg": avg("rom_degrees"),
+        "rejected_candidates": sum(int(v or 0) for v in gates.values()),
+        "calibration_mode": status.get("calibration_mode"),
+        "counter": "calibrated_squat_counter",
+    }
+
+
+def live_fatigue_summary(engine) -> dict:
+    indicator = live_fatigue_indicator(engine)
+    return {
+        "indicator": "rep-based fatigue indicator (0-100, higher = more drift)",
+        "status": indicator["status"],
+        "score": indicator["score"] if indicator["status"] != "INSUFFICIENT_REPS" else None,
+        **indicator["signals"],
+    }
 
 
 class SessionManager:
@@ -320,8 +358,10 @@ class SessionManager:
                 "user_id": getattr(e.current_user, "user_id", None),
                 "is_guest": getattr(e.current_user, "is_guest", True),
             } if getattr(e, "current_user", None) else None,
-            "exercise": e.exercise_tracker.get_session_summary(),
-            "fatigue": e.fatigue_engine.get_session_report(),
+            # Built from the calibrated squat counter and the rep-based
+            # fatigue indicator (the legacy tracker reported 0 reps).
+            "exercise": live_exercise_summary(e),
+            "fatigue": live_fatigue_summary(e),
             "peak_risk": e._session_peak_risk,
             "iri_history": e._session_iri_history,
             "spine_history": e._session_spine_history,
@@ -329,6 +369,12 @@ class SessionManager:
             "using_iri_v2": getattr(e, "using_iri_v2", False),
             "camera_id": e.current_camera_id,
         }
+        if self.validated_claims_only:
+            # Same rule as live telemetry: no unvalidated IRI / TCN output in
+            # stored or returned reports. peak_risk stays an int for the DB
+            # schema; the UI does not display it.
+            report.update({"iri_history": [], "using_temporal": False, "using_iri_v2": False})
+            return report
         if hasattr(e.injury_predictor, "get_session_report"):
             report["iri"] = e.injury_predictor.get_session_report()
         if e.uncertainty_manager:
