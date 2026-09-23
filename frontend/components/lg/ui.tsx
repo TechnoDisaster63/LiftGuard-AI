@@ -84,5 +84,8 @@ export const FLAG_CUE: Record<string, { cue: string; why: string }> = {
   KNEES_CAVING: { cue: "Knees out", why: "Knees moved in toward each other at the bottom" },
   HEELS_LIFTING: { cue: "Heels down", why: "Heel came up off the floor" },
   DEPTH_INCONSISTENT: { cue: "Match your depth", why: "15° shallower than your usual rep" },
-  FAST_DESCENT: { cue: "Slow down", why: "Dropped into the squat in under 0.2 s" },
+  FAST_DESCENT: { cue: "Slow down", why: "Dropped into the bottom in under 0.2 s" },
+  SHALLOW_PUSHUP: { cue: "Chest lower", why: "Elbow stayed above 110° at the bottom" },
+  HIPS_SAGGING: { cue: "Hips up", why: "Hips dropped below the shoulder-ankle line" },
+  HIPS_PIKING: { cue: "Hips down", why: "Hips rose above the shoulder-ankle line" },
 };

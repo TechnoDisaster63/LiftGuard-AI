@@ -91,6 +91,8 @@ The live counter and the offline analyzer share one engine (`backend/app/video_a
 
 Squat is the first movement mode, not the last. The engine is built so a new mode brings three things: its own joint metrics, a rep definition with gates that reject look-alike movements, and form rules a coach would sign off on. Each one is checked against recorded clips before it ships. The same pipeline, calibration and report format then carry over unchanged.
 
+Push-up is next. Its engine is in place: elbow-angle rep counting, gates that reject standing arm bends and sliding hands, and flags for shallow reps, sagging or piking hips, depth drift and fast descent. So far it is tested only on synthetic skeletons, so it isn't selectable in the app until it has been checked on a recorded clip. Lunge and jumping jacks follow the same path. [docs/MOVEMENT_MODES.md](docs/MOVEMENT_MODES.md) has the plan and the exercise-recognizer hook.
+
 ## Development
 
 ```bash
@@ -101,7 +103,7 @@ cd backend && pip install -r requirements-dev.txt && pytest -q && ruff check app
 cd frontend && npm ci && npx tsc --noEmit && npm run build
 ```
 
-The backend suite has 88 tests. They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), each coaching flag firing on its fault and staying quiet on normal reps, report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
+The backend suite has 115 tests. They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), each coaching flag firing on its fault and staying quiet on normal reps, report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
 
 Manual start, if you'd rather not use the launcher:
 

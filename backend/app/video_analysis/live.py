@@ -46,6 +46,8 @@ def named_landmarks(landmarks, names: tuple[str, ...]) -> dict[str, Point]:
 
 
 class LiveSquatCounter:
+    movement = "squat"
+
     def __init__(self, fps: float = 25.0, config: AnalysisConfig | None = None, aspect: float = 16 / 9,
                  window_seconds: float = 30.0, recalibrate_seconds: float = 1.0) -> None:
         self.fps = fps
@@ -119,6 +121,7 @@ class LiveSquatCounter:
         phase = "down" if self.machine.state == "bottom" else "up"
         last = self.machine.reps[-1] if self.machine.reps else None
         return {
+            "movement": self.movement,
             "exercise": "Squat" if self.machine.reps else "Detecting squat...",
             "rep_count": self.rep_count,
             "phase": phase if counting else "idle",
@@ -144,8 +147,10 @@ class LiveSquatFeed:
     """
 
     def __init__(self, fps: float | None = None, fps_probe_frames: int = 30,
-                 clock=None, landmark_names: tuple[str, ...] | None = None) -> None:
+                 clock=None, landmark_names: tuple[str, ...] | None = None, mode: str = "squat") -> None:
         import time
+
+        from .movements import counter_class
 
         from .analyzer import POSE_LANDMARK_NAMES
 
@@ -156,6 +161,8 @@ class LiveSquatFeed:
         self.pending: list[tuple[float, dict | None]] = []
         self.counter: LiveSquatCounter | None = None
         self.aspect = 16 / 9
+        self.mode = mode
+        self.counter_cls = counter_class(mode)
 
     def update(self, landmarks, aspect: float | None = None) -> dict:
         """``landmarks``: MediaPipe landmark list, or None when there is no usable pose."""
@@ -170,9 +177,9 @@ class LiveSquatFeed:
             elapsed = self.pending[-1][0] - self.pending[0][0]
             fps = (len(self.pending) - 1) / elapsed if elapsed > 0 else 25.0
         if fps is None:
-            return self.warming_status()
-        self.counter = LiveSquatCounter(fps=float(np.clip(fps, 5.0, 120.0)), aspect=self.aspect)
-        status = self.warming_status()
+            return self.warming_status(self.mode)
+        self.counter = self.counter_cls(fps=float(np.clip(fps, 5.0, 120.0)), aspect=self.aspect)
+        status = self.warming_status(self.mode)
         for _, buffered in self.pending:
             status = self.counter.update(buffered)
         self.pending = []
@@ -182,11 +189,30 @@ class LiveSquatFeed:
         self.counter = None
         self.pending = []
 
+    def set_mode(self, mode: str) -> bool:
+        """Switch movement mode (from the settings or a recognizer). Returns True if it changed.
+
+        Switching starts a fresh counter: reps and calibration do not carry
+        over between movements. The measured frame rate is kept.
+        """
+        from .movements import counter_class
+
+        cls = counter_class(mode)
+        if mode == self.mode:
+            return False
+        fps = self.counter.fps if self.counter else self.fixed_fps
+        self.mode, self.counter_cls, self.fixed_fps = mode, cls, fps
+        self.reset()
+        return True
+
     @property
     def fps(self) -> float | None:
         return self.counter.fps if self.counter else None
 
     @staticmethod
-    def warming_status() -> dict:
-        return {"exercise": "Detecting squat...", "rep_count": 0, "phase": "idle", "phase_display": "",
-                "calibration_mode": "WARMING_UP", "source": "calibrated_squat_counter"}
+    def warming_status(mode: str = "squat") -> dict:
+        from .movements import MOVEMENT_MODES
+
+        info = MOVEMENT_MODES[mode]
+        return {"movement": mode, "exercise": f"Detecting {info['noun']}...", "rep_count": 0, "phase": "idle",
+                "phase_display": "", "calibration_mode": "WARMING_UP", "source": info["source"]}
