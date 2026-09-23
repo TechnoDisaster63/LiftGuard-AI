@@ -86,3 +86,16 @@ Pipeline notes: MediaPipe tracks the animated body (100% pose coverage on a 40 s
 | Crossover Sprints | Cataloged (on-screen label) |
 
 Pipeline notes: the full 82 s file is refused by the 60 s input limit. Split into 0-55 s and 54-82 s, pose coverage was 99.6% and 63%. The first part counted 0 reps. The second part counted 1 false squat rep on a held "thighs parallel" running pose: the measured knee was the lifted leg, not a squatting leg. Knee angle on one leg cannot tell a squat from a knee lift. Follow-up needed: require both knees to bend and the hips to drop before a rep counts.
+
+### Video 5: gym athletic-training edit (strength vs power, real people, mostly front view)
+
+Gym / weighted and plyometric category.
+
+| Exercise | Status |
+|---|---|
+| Dumbbell Lunges | Cataloged |
+| Box Step-Ups | Cataloged |
+| Plyometric (vertical) Jumps | Cataloged |
+| Lateral Bounds / Skater Jumps | Cataloged |
+
+Pipeline notes: a 40 s segment is refused (pose visible in 25% of frames). MediaPipe found a body in 88% of frames, but the full shoulder-hip-knee-ankle chain was usable in only 25%: tight crops cut off the legs or head, equipment blocks joints, and cutaways show an interview and talking-to-camera shots. Once it also drew a skeleton on a seated interviewee. The coverage gate refused the clip correctly, and no squat reps were reported.
