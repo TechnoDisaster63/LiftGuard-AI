@@ -62,6 +62,7 @@ async def start_session(req: SessionStartRequest, db: DBSession = Depends(get_db
             process_every_n=merged["process_every_n"],
             use_temporal=merged["use_temporal"],
             movement_mode=movement_mode,
+            auto_detect=bool(merged.get("auto_detect")),
         )
     except Exception as exc:
         raise HTTPException(

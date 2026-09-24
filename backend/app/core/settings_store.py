@@ -16,6 +16,7 @@ _FIELDS = (
     "process_every_n",
     "use_temporal",
     "movement_mode",
+    "auto_detect",
 )
 
 
@@ -28,6 +29,7 @@ def _environment_defaults() -> dict:
         "process_every_n": env_settings.PROCESS_EVERY_N,
         "use_temporal": env_settings.USE_TEMPORAL,
         "movement_mode": "squat",
+        "auto_detect": False,  # recognizer mode switching: off unless the user turns it on
     }
 
 

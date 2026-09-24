@@ -71,14 +71,17 @@ Interface:
 4. `RecognizerGate` decides (≥ 0.8 for 2 s, never while the rep machine is mid-rep), then `feed.set_mode` starts a fresh counter. The live status gets an `auto_detect` block (last label and confidence, switches, error).
 5. A settings change of mode resets the window and the candidate. A recognizer error turns auto-detect off for that session, and counting carries on in the current mode.
 
-Squat stays the default mode and is picked by hand. Auto-detect is off unless both are set on the backend:
+Squat stays the default mode and is picked by hand. Auto-detect needs the model file on the backend machine:
 
 ```bash
-LIFTGUARD_AUTO_DETECT=1
 LIFTGUARD_RECOGNIZER_MODEL=C:\Users\you\LiftGuard\recognizer_rf.npz   # local file, never in git
 ```
 
-No frontend switch exists for it yet, and the dashboard does not show the `auto_detect` block yet.
+Then it is turned on per session by either of:
+- **Settings → Auto-detect movement** (the `auto_detect` session default, off by default). Without the model file, the row says "Not available on this machine" and gives the reason (`GET /api/settings/auto-detect`).
+- `LIFTGUARD_AUTO_DETECT=1` on the backend, for development. This turns it on even when the settings toggle is off.
+
+On the Live screen, the top chip shows the live counter's mode ("Movement analysis · Push-up mode · auto-detect on"). After a switch, a note says "Auto-detect switched to Push-up. Reps start again for this movement." for 5 s.
 
 ### How the app gets the model: local file only (free pilot)
 
@@ -119,4 +122,4 @@ Recognizer evaluation (ML side, measured on held-out clips):
 - Push-ups (side): 92% clip accuracy, 82% of windows ≥ 0.8. Jumping jacks: 98% / 85%.
 - False switches: 0 of 442 clips of other actions tripped the 0.8 / 2 s gate.
 
-Before auto-detect is turned on for users: at least two modes pass the recorded-clip check (Rollout step 4), a real recorded session is run with auto-detect on and the switch times checked, and the dashboard shows when the mode changed.
+Before auto-detect is turned on for users: at least two modes pass the recorded-clip check (Rollout step 4), a real recorded session is run with auto-detect on and the switch times checked. The Live screen already shows when the mode changes.

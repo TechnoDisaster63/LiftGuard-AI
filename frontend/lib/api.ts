@@ -94,6 +94,14 @@ export interface SessionDefaults {
   process_every_n: number;
   use_temporal: boolean;
   movement_mode: string;
+  /** Recognizer picks the mode (experimental, off by default; needs the local model file). */
+  auto_detect?: boolean;
+}
+
+/** Whether auto-detect can run on this backend. */
+export interface AutoDetectInfo {
+  available: boolean;
+  reason: string | null;
 }
 
 /** One movement mode (backend video_analysis/movements.py). */
@@ -239,6 +247,7 @@ export const api = {
         body: JSON.stringify(patch),
       }),
     movementModes: () => request<{ modes: MovementMode[] }>("/api/settings/movement-modes"),
+    autoDetect: () => request<AutoDetectInfo>("/api/settings/auto-detect"),
   },
 };
 

@@ -21,6 +21,14 @@ def update_settings(patch: SessionDefaultsPatch):
     return session_defaults.update(fields)
 
 
+@router.get("/auto-detect")
+def auto_detect_info():
+    """Whether auto-detect can be turned on here (the model is a local file, never shipped)."""
+    from ..video_analysis.auto_mode import availability
+
+    return availability()
+
+
 @router.get("/movement-modes")
 def movement_modes():
     """Every movement mode with whether it can be picked today."""

@@ -14,6 +14,7 @@ import { SetRatingCard } from "@/components/contrib/SetRatingCard";
 import type { ContributionSet } from "@/lib/api";
 import { contribStartFields } from "@/lib/contrib";
 import { MovementLine, MovementPicker } from "@/components/lg/MovementPicker";
+import { useMovementMode } from "@/lib/movement";
 
 type StageState = "idle" | "counting" | "clean" | "flagged" | "fatigue";
 type LastRep = { rep?: number; form_flags?: string[] } | null;
@@ -22,6 +23,13 @@ type LastRep = { rep?: number; form_flags?: string[] } | null;
 // rep holds until the next rep starts going down.
 const CLEAN_HOLD_MS = 1600;
 const REP_PRIORITY_MS = 2500;
+
+type AutoDetectStatus = {
+  enabled: boolean;
+  last: { label: string; confidence: number } | null;
+  switches: { from: string; to: string; t: number }[];
+  error: string | null;
+};
 
 function readStatus(t: TelemetryPayload | null) {
   const s = (t?.exercise_status ?? {}) as Record<string, unknown>;
@@ -38,6 +46,8 @@ function readStatus(t: TelemetryPayload | null) {
     fatigueScore: t?.fatigue_score ?? null,
     fatigueStatus: t?.fatigue_alert ?? null,
     durationDrift: fi?.signals?.rep_duration_drift_pct ?? null,
+    movement: typeof s.movement === "string" ? s.movement : null,
+    autoDetect: (s.auto_detect ?? null) as AutoDetectStatus | null,
   };
 }
 
@@ -247,6 +257,24 @@ function LiveInner() {
     [telemetry, sessionId]
   );
   useVoiceCues(voiceStatus, voiceOn);
+
+  // ---- movement mode on screen: the live counter's mode, which auto-detect can change ----
+  const { modes: movementModes, current: pickedMode } = useMovementMode();
+  const liveMode = movementModes.find((m) => m.id === st.movement) ?? pickedMode;
+  const switchCount = st.autoDetect?.switches.length ?? 0;
+  const seenSwitches = useRef(0);
+  const [switchNote, setSwitchNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (switchCount > seenSwitches.current && st.autoDetect) {
+      const last = st.autoDetect.switches[switchCount - 1];
+      const label = movementModes.find((m) => m.id === last.to)?.label ?? last.to;
+      setSwitchNote(`Auto-detect switched to ${label}. Reps start again for this movement.`);
+      const timer = setTimeout(() => setSwitchNote(null), 5000);
+      seenSwitches.current = switchCount;
+      return () => clearTimeout(timer);
+    }
+    seenSwitches.current = switchCount;
+  }, [switchCount]);
   const [ledger, setLedger] = useState<{ rep: number; flagged: boolean }[]>([]);
   const [repAt, setRepAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -447,8 +475,13 @@ function LiveInner() {
         </button>
         )}
         <span className="lg-chip lg-m lg-hide-sm" style={glass}>
-          Movement analysis · Squat mode
+          Movement analysis · {liveMode.label} mode{st.autoDetect?.enabled ? " · auto-detect on" : ""}
         </span>
+        {switchNote && (
+          <span className="lg-chip lg-m" style={{ ...glass, color: "var(--lg-mint)" }} role="status">
+            {switchNote}
+          </span>
+        )}
         {contributingNow && (
           <span className="lg-chip lg-m" style={{ ...glass, color: "var(--lg-mint)" }} title="Help train LiftGuard is on: body points only, never video">
             Saving body points
