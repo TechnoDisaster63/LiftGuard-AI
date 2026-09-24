@@ -82,3 +82,26 @@ def test_stop_frees_the_session_even_if_the_report_fails(client, monkeypatch):
     client.post(f"/api/sessions/{sid}/stop")
     assert routes_sessions._sessions == {}
     assert client.post("/api/sessions/start", json={}).status_code in (200, 201)
+
+
+def test_session_start_passes_the_auto_detect_setting(client, monkeypatch):
+    from app.core.settings_store import session_defaults
+
+    seen = []
+
+    def make(**k):
+        seen.append(k)
+        return FakeManager()
+
+    monkeypatch.setattr(routes_sessions, "SessionManager", make)
+    original = session_defaults.get()["auto_detect"]
+    try:
+        session_defaults.update({"auto_detect": False})
+        assert client.post("/api/sessions/start", json={}).status_code in (200, 201)
+        assert seen[-1]["auto_detect"] is False
+        routes_sessions._sessions.clear()
+        session_defaults.update({"auto_detect": True})
+        assert client.post("/api/sessions/start", json={}).status_code in (200, 201)
+        assert len(seen) == 2 and seen[-1]["auto_detect"] is True
+    finally:
+        session_defaults.update({"auto_detect": original})

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE, api, SessionDefaults } from "@/lib/api";
+import { API_BASE, api, AutoDetectInfo, SessionDefaults } from "@/lib/api";
 import { Alert, Segmented, Spinner, Switch } from "@/components/lg/ui";
 import { useBackendOnline } from "@/components/layout/TopNav";
 import { CAMERA_CANDIDATES, getCameraPin, getLastCamera, setCameraPin } from "@/lib/camera";
@@ -14,7 +14,10 @@ export default function SettingsPage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [autoInfo, setAutoInfo] = useState<AutoDetectInfo | null>(null);
+
   useEffect(() => {
+    api.settings.autoDetect().then(setAutoInfo).catch(() => {});
     api.settings.get().then(setDefaults).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load settings"));
   }, []);
 
@@ -39,6 +42,17 @@ export default function SettingsPage() {
   const rows: [string, string, React.ReactNode][] = defaults
     ? [
         ["Movement mode", "Squat is ready today. Push-up, lunge and jumping jacks are built and become selectable once each has been checked on a recorded clip.", <MovementPicker key="m" />],
+        [
+          "Auto-detect movement",
+          "Experimental, off by default. The recognizer names the movement and switches mode once the same movement holds for 2 s, never mid-rep. It only switches to modes that can be picked, so today it stays on squat. Counting and cues always come from the mode's own rules.",
+          autoInfo?.available || defaults.auto_detect ? (
+            <Switch key="a" label="Auto-detect movement" checked={!!defaults.auto_detect} onChange={(v) => patch({ auto_detect: v })} />
+          ) : (
+            <div key="a" className="lg-m lg-faint text-right" style={{ fontSize: 11, maxWidth: 260 }}>
+              Not available on this machine. {autoInfo?.reason ?? ""}
+            </div>
+          ),
+        ],
         ["Camera", "Found automatically at start: LiftGuard uses the first camera that sends video.", <CameraSetting key="c" />],
         ["Voice cues", "Spoken feedback during the session.", <Switch key="v" label="Voice cues" checked={defaults.voice_enabled} onChange={(v) => patch({ voice_enabled: v })} />],
         ["Laser pointer", "Arduino pan-tilt laser, if one is plugged in.", <Switch key="l" label="Laser pointer" checked={defaults.arduino_enabled} onChange={(v) => patch({ arduino_enabled: v })} />],

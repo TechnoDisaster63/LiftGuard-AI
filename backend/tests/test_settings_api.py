@@ -69,3 +69,23 @@ def test_session_summary_and_fatigue_follow_the_movement_mode():
     fatigue = live_fatigue_indicator(engine)
     assert fatigue["status"] in {"WATCH", "ELEVATED"}
     assert fatigue["signals"]["trunk_lean_drift_degrees"] is None
+
+
+def test_auto_detect_is_off_by_default_and_can_be_toggled():
+    assert client.get("/api/settings").json()["auto_detect"] is False
+    on = client.patch("/api/settings", json={"auto_detect": True})
+    assert on.status_code == 200 and on.json()["auto_detect"] is True
+    off = client.patch("/api/settings", json={"auto_detect": False})
+    assert off.json()["auto_detect"] is False
+
+
+def test_auto_detect_availability_follows_the_local_model_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("LIFTGUARD_RECOGNIZER_MODEL", raising=False)
+    info = client.get("/api/settings/auto-detect").json()
+    assert info["available"] is False and "not set" in info["reason"]
+    monkeypatch.setenv("LIFTGUARD_RECOGNIZER_MODEL", str(tmp_path / "missing.npz"))
+    assert client.get("/api/settings/auto-detect").json()["available"] is False
+    model = tmp_path / "m.npz"
+    model.write_bytes(b"x")
+    monkeypatch.setenv("LIFTGUARD_RECOGNIZER_MODEL", str(model))
+    assert client.get("/api/settings/auto-detect").json() == {"available": True, "reason": None}

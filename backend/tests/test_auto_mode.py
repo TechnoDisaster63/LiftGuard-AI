@@ -285,3 +285,12 @@ def test_engine_without_auto_detect_is_unchanged():
         Engine._update_live_squat(eng, 16 / 9)
     assert "auto_detect" not in eng.current_exercise_status
     assert eng.current_exercise_status["movement"] == "squat"
+
+
+def test_settings_toggle_overrides_the_env_flag(monkeypatch, tmp_path):
+    monkeypatch.delenv("LIFTGUARD_AUTO_DETECT", raising=False)
+    monkeypatch.setenv("LIFTGUARD_RECOGNIZER_MODEL", str(tiny_forest(tmp_path / "m.npz")))
+    assert switcher_from_env("squat", requested=True) is not None
+    assert switcher_from_env("squat", requested=False) is None
+    monkeypatch.delenv("LIFTGUARD_RECOGNIZER_MODEL")
+    assert switcher_from_env("squat", requested=True) is None     # no model file: stays off

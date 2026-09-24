@@ -122,11 +122,29 @@ def auto_detect_requested() -> bool:
     return os.environ.get("LIFTGUARD_AUTO_DETECT", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def switcher_from_env(mode: str = "squat") -> AutoModeSwitcher | None:
-    """The engine's entry point. None (auto-detect off) unless explicitly turned on with a usable model."""
-    if not auto_detect_requested():
+def model_path() -> str:
+    return os.environ.get("LIFTGUARD_RECOGNIZER_MODEL", "").strip()
+
+
+def availability() -> dict:
+    """For the settings screen: can auto-detect run on this backend?"""
+    path = model_path()
+    if not path:
+        return {"available": False, "reason": "No recognizer model on this machine (LIFTGUARD_RECOGNIZER_MODEL is not set)."}
+    if not os.path.isfile(path):
+        return {"available": False, "reason": "The recognizer model file set in LIFTGUARD_RECOGNIZER_MODEL was not found."}
+    return {"available": True, "reason": None}
+
+
+def switcher_from_env(mode: str = "squat", requested: bool | None = None) -> AutoModeSwitcher | None:
+    """None (auto-detect off) unless turned on with a usable model.
+
+    ``requested`` is the session's settings toggle; None falls back to the
+    LIFTGUARD_AUTO_DETECT environment flag (the engine's default at start-up).
+    """
+    if not (auto_detect_requested() if requested is None else requested):
         return None
-    path = os.environ.get("LIFTGUARD_RECOGNIZER_MODEL", "").strip()
+    path = model_path()
     if not path or not os.path.isfile(path):
         log.warning("LIFTGUARD_AUTO_DETECT is on but LIFTGUARD_RECOGNIZER_MODEL=%r is not a file; "
                     "auto-detect stays off.", path)

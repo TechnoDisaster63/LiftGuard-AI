@@ -167,7 +167,8 @@ class SessionManager:
     validated_claims_only = True
 
     def __init__(self, voice_enabled=True, arduino_enabled=True,
-                 model_complexity=0, process_every_n=1, use_temporal=True, movement_mode="squat"):
+                 model_complexity=0, process_every_n=1, use_temporal=True, movement_mode="squat",
+                 auto_detect=False):
         # Imported here (not at module load) so the FastAPI app and its
         # test suite can start without the heavy CV/ML stack (opencv,
         # mediapipe, torch) installed. See requirements-dev.txt.
@@ -187,6 +188,12 @@ class SessionManager:
         # is completely unaffected by this.
         self.engine.render_mode = "web"
         self.movement_mode = movement_mode
+        if auto_detect:
+            # Settings toggle (off by default). Needs the local model file;
+            # without it this stays None and the session runs as before.
+            from ..video_analysis.auto_mode import switcher_from_env
+
+            self.engine.auto_detect = switcher_from_env(movement_mode, requested=True)
         self.cap = None
         self.active = False
         self.camera_id = 0

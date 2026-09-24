@@ -10,6 +10,7 @@ class SessionDefaults(BaseModel):
     process_every_n: int
     use_temporal: bool
     movement_mode: str = "squat"
+    auto_detect: bool = False
 
 
 class SessionDefaultsPatch(BaseModel):
@@ -21,3 +22,4 @@ class SessionDefaultsPatch(BaseModel):
     process_every_n: int | None = None
     use_temporal: bool | None = None
     movement_mode: str | None = None
+    auto_detect: bool | None = None
