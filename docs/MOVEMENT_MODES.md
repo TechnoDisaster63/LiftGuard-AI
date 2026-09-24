@@ -53,16 +53,70 @@ First run on the one real clip we have (front-view squats, 15 normal reps): the 
 
 ## Recognizer hook
 
-The exercise recognizer (MM-Fit, 10 classes) only names the movement. Counting and every flag stay with the mode's own landmark rules, so a wrong or unsupported label cannot create a flag.
+The exercise recognizer only names the movement. Counting and every flag stay with the mode's own landmark rules, so a wrong or unsupported label cannot create a flag.
 
-Interface for the recognizer:
-- Input: the same MediaPipe landmark stream the counter gets (33 points, x, y, visibility), in windows of about 2 s.
-- Output per window: `(label, confidence)` using MM-Fit label names (`squats`, `pushups`, `lunges`, `jumping_jacks`, ...).
+Interface:
+- Input: the same MediaPipe landmark stream the counter gets (33 points, normalized x, y), as a 2 s window sampled at about 10 fps (20 frames; other lengths are resampled).
+- Output per window: `(label, confidence)`, label one of `squats`, `pushups`, `lunges`, `jumping_jacks` or `other`. A window with no pose in most frames returns `('other', 0.0)`.
 - `RecognizerGate.observe(label, confidence, now, mid_rep)` returns a new mode only when the same supported label has held at ≥ 0.8 confidence for 2 s, and never mid-rep. Labels without a mode (`RECOGNIZER_LABELS[...] is None`) change nothing.
 - The engine then calls `feed.set_mode(mode)`. That starts a fresh counter: reps and calibration do not carry across movements.
 
-Not wired into the engine yet: the gate and `set_mode` are in place and tested; calling them from the frame loop waits for the recognizer model.
+### Auto-detect in the engine (wired, off by default)
 
-Recognizer evaluation so far (ML agent, Penn Action clips, not yet on the MM-Fit model in the app):
-- Clip accuracy: jumping jacks 96%, push-ups 85%, squats 48% overall (85% front view, 36-42% side view). Squat stays manual-select; auto-detect for squats will need the user facing the camera.
-- False switches: on 1,015 clips of other actions, 2 would trip the 0.8 / 2 s gate (bench press read as push-ups). Single windows at ≥ 0.8 were rare (3.3% bench press, 7.1% clean and jerk, 0% jump rope). The 0.8 threshold stays.
+`backend/app/video_analysis/auto_mode.py` (`AutoModeSwitcher`) connects the recognizer to the live frame loop (`LiftGuardAI._update_live_squat`):
+
+1. After each processed frame goes to the counter, the switcher samples landmarks at 10 fps of stream time (the counter's frame rate, so video files behave the same at any playback speed).
+2. Every 0.5 s it sends the last 2 s window to the recognizer.
+3. A label whose mode can't be picked yet is treated as `other`. A mode counts only when `validated` is True, or when it is unlocked for development with `LIFTGUARD_PREVIEW_MODES`. **Today only squat is validated, so auto-detect cannot switch a user out of squat.** The switcher gets the same rule as the mode picker.
+4. `RecognizerGate` decides (≥ 0.8 for 2 s, never while the rep machine is mid-rep), then `feed.set_mode` starts a fresh counter. The live status gets an `auto_detect` block (last label and confidence, switches, error).
+5. A settings change of mode resets the window and the candidate. A recognizer error turns auto-detect off for that session, and counting carries on in the current mode.
+
+Squat stays the default mode and is picked by hand. Auto-detect is off unless both are set on the backend:
+
+```bash
+LIFTGUARD_AUTO_DETECT=1
+LIFTGUARD_RECOGNIZER_MODEL=C:\Users\you\LiftGuard\recognizer_rf.npz   # local file, never in git
+```
+
+No frontend switch exists for it yet, and the dashboard does not show the `auto_detect` block yet.
+
+### How the app gets the model: local file only (free pilot)
+
+The model was trained on MM-Fit plus Penn Action. Penn Action has no licence and is used for non-commercial research with citation (Zhang, Zhu, Derpanis, "From Actemes to Action: A Strongly-supervised Representation for Detailed Action Understanding", ICCV 2013). So the model file, and anything derived from Penn Action, **is never committed to this repo and never shipped** in a build, installer, Docker image or release asset. `.gitignore` blocks `*.joblib` and `*.npz`, and `tests/test_auto_mode.py` fails if a model file shows up in the repo.
+
+For the free pilot the backend reads the model from a local path (`LIFTGUARD_RECOGNIZER_MODEL`) on the machine running it. The file stays in the owner's private Google Drive and is copied by hand to that machine. Why this and not a download at startup:
+
+- A startup download from a private location needs a credential or a public link inside the app. Anyone with the app could then fetch the model, which is redistribution by another route.
+- The pilot runs on the owner's own laptop, so a local file costs nothing and needs no server.
+- Without the file, auto-detect stays off and everything else works as before.
+
+If LiftGuard is ever distributed, the recognizer has to be retrained on data whose licence allows that (for example MM-Fit alone, once its label licence is checked). A download from a private location doesn't fix the licence problem.
+
+### Model format
+
+The app loads a `.npz` export of the random forest (tree arrays only), not the `.joblib` pickle:
+
+- The pickle was written with scikit-learn 1.7.2 and numpy 2.x. The app pins scikit-learn 1.3.0 and numpy 1.24.3, which can't load it.
+- A `.npz` is loaded with `allow_pickle=False`, so a model file can't run code, and reading it needs numpy only.
+
+Make the export where the model was trained (same scikit-learn version):
+
+```bash
+cd backend
+python export_recognizer.py recognizer_rf.joblib recognizer_rf.npz
+```
+
+The script checks itself: exported vs scikit-learn probabilities on random inputs must match (argmax agreement 1.000, max difference 3e-10 on the current model). On 747 synthetic landmark windows the app's reader and the original `recognizer.py` gave the same label every time, with confidences equal to within 1e-9. One `predict` takes about 1 ms (the scikit-learn version took about 8 ms).
+
+### What the tests prove, and what they don't
+
+`tests/test_auto_mode.py` runs synthetic streams (`tests/synthetic_pose.py`: cartoon skeletons of each movement, not recordings) through the real live feed and switcher with scripted recognizers and a tiny hand-built forest. They check: one switch after the label holds 2 s, a fresh counter after the switch, no switch to an unvalidated mode, none below 0.8, none on flickering labels, `other` or no pose, no restart when the label is the current mode, no switch mid-rep, the same timing at 15, 30 and 60 fps, a reset on a manual mode change, and that a recognizer error turns auto-detect off. Engine-level tests run where mediapipe is installed and are skipped in CI.
+
+With the real model (run locally, not in CI) the cartoon streams got the right top label for side-view squats (17 of 28 windows), push-ups, jumping jacks and lunges, but mostly under 0.8, so nothing switched even with every mode unlocked. Front-view cartoon squats read as `other`. That is a limit of the cartoons, not a measure of the model. It shows the pipeline runs end to end and that the gate is strict. Accuracy has to come from real clips.
+
+Recognizer evaluation (ML side, measured on held-out clips):
+- Side squats: 57% clip accuracy, 25% of windows ≥ 0.8. Front squats 84%, back squats 40%. Squat stays manual-select.
+- Push-ups (side): 92% clip accuracy, 82% of windows ≥ 0.8. Jumping jacks: 98% / 85%.
+- False switches: 0 of 442 clips of other actions tripped the 0.8 / 2 s gate.
+
+Before auto-detect is turned on for users: at least two modes pass the recorded-clip check (Rollout step 4), a real recorded session is run with auto-detect on and the switch times checked, and the dashboard shows when the mode changed.
