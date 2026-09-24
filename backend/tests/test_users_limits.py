@@ -6,8 +6,19 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.api.routes_users import _estimate_decoded_size
+from app.identity.locality import require_local
 
 client = TestClient(app)
+
+
+def setup_module(_):
+    # Face frames are only accepted from the backend's own machine; these
+    # tests exercise the upload limits behind that check.
+    app.dependency_overrides[require_local] = lambda: None
+
+
+def teardown_module(_):
+    app.dependency_overrides.pop(require_local, None)
 
 _TINY_JPEG_B64 = base64.b64encode(b"\xff\xd8\xff" + b"\x00" * 64).decode()
 

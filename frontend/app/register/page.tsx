@@ -1,22 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api, UserRegisterResponse } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { api, FaceStatus, UserRegisterResponse } from "@/lib/api";
 import { Spinner } from "@/components/lg/ui";
 
 type Step = "name" | "preview" | "countdown" | "capturing" | "submitting" | "success" | "error";
 
 const CAPTURE_DURATION_MS = 6000;
 // 6 s at 250 ms = 24 frames. The backend accepts at most 30 per request
-// (LIFTGUARD_MAX_REGISTER_IMAGES) and needs at least 10 with a face.
+// (LIFTGUARD_MAX_REGISTER_IMAGES) and needs at least 5 with one clear face.
 const CAPTURE_INTERVAL_MS = 250;
 const MAX_CAPTURE_FRAMES = 28;
 // Downscale before upload: face detection doesn't need 1080p, and smaller
 // frames keep the request fast on a laptop.
 const CAPTURE_MAX_WIDTH = 640;
 
+// Honest privacy copy. Shown only when the backend confirms this browser is on
+// the same computer, which is when it is true.
+const FACE_PRIVACY_COPY =
+  "Your face never leaves this device. LiftGuard keeps a face signature (128 numbers), not a photo, on this computer only. It is never uploaded or shared, and you can delete it on the Users page.";
+
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterInner />
+    </Suspense>
+  );
+}
+
+function RegisterInner() {
+  const params = useSearchParams();
+  // /register?user=12 re-enrolls an existing user's face.
+  const reenrollId = params.get("user") ? Number(params.get("user")) : null;
+  const [faceStatus, setFaceStatus] = useState<FaceStatus | null>(null);
+  const [faceStatusError, setFaceStatusError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("name");
   const [displayName, setDisplayName] = useState("");
   const [countdown, setCountdown] = useState(3);
@@ -36,6 +55,21 @@ export default function RegisterPage() {
   }, []);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
+
+  useEffect(() => {
+    api.users
+      .faceStatus()
+      .then(setFaceStatus)
+      .catch((e) => setFaceStatusError(e instanceof Error ? e.message : "Couldn't check face ID"));
+    if (reenrollId) {
+      api.users
+        .get(reenrollId)
+        .then((u) => setDisplayName(u.display_name))
+        .catch(() => setFaceStatusError("That user wasn't found."));
+    }
+  }, [reenrollId]);
+
+  const faceReady = !!faceStatus && faceStatus.available && faceStatus.local;
 
   // Attaches the already-fetched stream to the <video> element once it
   // actually exists in the DOM (it's conditionally rendered based on
@@ -149,7 +183,14 @@ export default function RegisterPage() {
     setStep("submitting");
     stopCamera();
     try {
-      const res = await api.users.register(displayName.trim(), framesRef.current);
+      let res: UserRegisterResponse;
+      if (reenrollId) {
+        const u = await api.users.enrollFace(reenrollId, framesRef.current);
+        res = { user_id: u.user_id, display_name: u.display_name, samples_used: framesRef.current.length, frames_received: framesRef.current.length, status: "enrolled" };
+      } else {
+        res = await api.users.register(displayName.trim(), framesRef.current);
+      }
+      framesRef.current = [];
       setResult(res);
       setStep("success");
     } catch (e) {
@@ -162,6 +203,7 @@ export default function RegisterPage() {
             ? e.message
             : "Registration failed"
       );
+      framesRef.current = [];
       setStep("error");
     }
   };
@@ -197,24 +239,41 @@ export default function RegisterPage() {
     <div className="lg-fade">
       {step === "name" ? (
         <div className="max-w-3xl">
-          <div className="lg-m lg-dim">Register someone</div>
+          <div className="lg-m lg-dim">{reenrollId ? "Set up face ID" : "Register someone"}</div>
           <div className="lg-d mt-1.5" style={{ fontSize: 92 }}>
-            Who&apos;s registering?
+            {reenrollId ? displayName || "…" : <>Who&apos;s registering?</>}
           </div>
           <p className="lg-dim mt-3" style={{ fontSize: 16, maxWidth: 560 }}>
-            Enrolls a face so LiftGuard recognises this person when a session starts. About 6 seconds in front of the webcam. Face samples stay on this machine.
+            Enrolls a face so LiftGuard recognises this person when a session starts on this computer&apos;s camera. About 6 seconds in front of the webcam.
           </p>
+          {faceReady && (
+            <p className="lg-chip lg-m mt-4" data-testid="face-privacy" style={{ color: "var(--lg-mint)", borderColor: "var(--lg-mint)", whiteSpace: "normal", maxWidth: 620, lineHeight: 1.5 }}>
+              {FACE_PRIVACY_COPY}
+            </p>
+          )}
+          {faceStatus && !faceStatus.local && (
+            <div className="lg-alert mt-4" style={{ fontSize: 15, maxWidth: 620 }}>
+              Face ID is not available from this device. It only runs in a browser on the computer that runs LiftGuard, so faces never travel over the network. Open LiftGuard on that computer (http://localhost:3000) to register.
+            </div>
+          )}
+          {faceStatus && faceStatus.local && !faceStatus.available && (
+            <div className="lg-alert mt-4" style={{ fontSize: 15, maxWidth: 620 }}>
+              Face ID is not available on this machine: the face model files are missing. Run <code>python fetch_face_models.py</code> in backend/, then restart LiftGuard.
+            </div>
+          )}
+          {faceStatusError && <div className="lg-alert mt-4" style={{ fontSize: 15, maxWidth: 620 }}>{faceStatusError}</div>}
           <input
             autoFocus
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && displayName.trim() && startCamera()}
+            onKeyDown={(e) => e.key === "Enter" && displayName.trim() && faceReady && startCamera()}
+            disabled={!!reenrollId}
             placeholder="Jordan Lee"
             aria-label="Display name"
             className="lg-input lg-d mt-8"
             style={{ fontSize: 72 }}
           />
-          <button className="lg-btn lg mt-8" onClick={startCamera} disabled={!displayName.trim()}>
+          <button className="lg-btn lg mt-8" onClick={startCamera} disabled={!displayName.trim() || !faceReady}>
             Continue to camera <kbd>Enter</kbd>
           </button>
         </div>
@@ -264,7 +323,7 @@ export default function RegisterPage() {
                   {result.samples_used}
                   <span style={{ color: "var(--lg-faint)" }}>/{result.frames_received}</span>
                 </div>
-                <div className="lg-m lg-dim mt-3">Frames kept as face samples</div>
+                <div className="lg-m lg-dim mt-3">Frames used for the face signature · the frames themselves were discarded</div>
                 <div className="flex gap-3 mt-auto pt-8">
                   <Link href="/live" className="lg-btn lg">
                     Start a session
@@ -291,10 +350,11 @@ export default function RegisterPage() {
                   {sampleCount}
                   <span style={{ color: "var(--lg-faint)" }}>/{expectedFrames}</span>
                 </div>
-                <div className="lg-m lg-dim mt-3">Frames captured · the server keeps the ones with a face and needs at least 10</div>
+                <div className="lg-m lg-dim mt-3">Frames captured · needs at least 5 with one clear face · frames are discarded after</div>
+                <div className="lg-m mt-3" style={{ color: "var(--lg-mint)" }}>Your face never leaves this device</div>
                 {step === "submitting" && (
                   <div className="lg-m mt-6 flex items-center gap-2.5">
-                    <Spinner /> Processing face samples
+                    <Spinner /> Making the face signature
                   </div>
                 )}
                 <div className="flex gap-3 mt-auto pt-8">

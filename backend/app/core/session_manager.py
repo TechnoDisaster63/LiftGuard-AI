@@ -237,6 +237,11 @@ class SessionManager:
             # Frames arrive later over the WebSocket (push_browser_frame);
             # there is nothing to open or warm up here.
             self.cap = BrowserFrameSource()
+            # Face ID stays on the machine that runs LiftGuard. A browser
+            # camera may be on another device (phone, Codespace viewer), so
+            # its frames are never used for face ID; the session is Guest.
+            if hasattr(self.engine, "_live_scan_enabled"):
+                self.engine._live_scan_enabled = False
         else:
             self.cap, _ = open_camera(source)
         camera_id = source
