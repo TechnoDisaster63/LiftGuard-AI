@@ -117,8 +117,8 @@ The script checks itself: exported vs scikit-learn probabilities on random input
 
 With the real model (run locally, not in CI) the cartoon streams got the right top label for side-view squats (17 of 28 windows), push-ups, jumping jacks and lunges, but mostly under 0.8, so nothing switched even with every mode unlocked. Front-view cartoon squats read as `other`. That is a limit of the cartoons, not a measure of the model. It shows the pipeline runs end to end and that the gate is strict. Accuracy has to come from real clips.
 
-Recognizer evaluation (ML side, measured on held-out clips):
-- Side squats: 57% clip accuracy, 25% of windows ≥ 0.8. Front squats 84%, back squats 40%. Squat stays manual-select.
+Recognizer evaluation (ML side, measured on held-out clips; full tables and caveats in [ML_RESULTS.md](ML_RESULTS.md)):
+- Side squats: 57% clip accuracy, 25% of windows ≥ 0.8. Front/back-view squats: 84% clip accuracy, 40% of windows ≥ 0.8. Squat stays manual-select.
 - Push-ups (side): 92% clip accuracy, 82% of windows ≥ 0.8. Jumping jacks: 98% / 85%.
 - False switches: 0 of 442 clips of other actions tripped the 0.8 / 2 s gate.
 
