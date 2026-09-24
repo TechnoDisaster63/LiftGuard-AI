@@ -118,6 +118,7 @@ except ImportError:
     print("⚠️  exercise_tracker.py not found")
  
 # ── Calibrated squat counter (shared with offline analysis) ──
+from ..video_analysis.auto_mode import switcher_from_env
 from ..video_analysis.live import LiveSquatFeed
 
 
@@ -890,6 +891,10 @@ class LiftGuardAI:
         # offline analyzer. SessionManager passes the source fps for video
         # files; for a webcam the feed measures the processing rate.
         self.live_squat = LiveSquatFeed()
+        # Auto-detect (recognizer picks the mode) is off unless
+        # LIFTGUARD_AUTO_DETECT=1 and LIFTGUARD_RECOGNIZER_MODEL point at a
+        # local model file. See app/video_analysis/auto_mode.py.
+        self.auto_detect = switcher_from_env(self.live_squat.mode)
  
         self.feedback_message = "Stand in front of camera"
         self.feedback_color   = (255, 255, 255)
@@ -1142,11 +1147,20 @@ class LiftGuardAI:
         fps = source_fps / self.process_every_n if source_fps else None
         self.live_squat = LiveSquatFeed(fps=fps, mode=mode)
         self.current_exercise_status = LiveSquatFeed.warming_status(mode)
+        if getattr(self, "auto_detect", None) is not None:
+            self.auto_detect.reset(mode)
 
     def _update_live_squat(self, aspect):
         # A frame without a usable pose is still a frame: feeding None keeps
         # the counter's clock aligned with the video.
         status = self.live_squat.update(self.cached_landmarks_raw, aspect)
+        auto = getattr(self, "auto_detect", None)
+        if auto is not None:
+            # The recognizer only names the movement; on a switch the feed
+            # starts a fresh counter for the new mode.
+            if auto.observe(self.cached_landmarks_raw, aspect, self.live_squat):
+                status = LiveSquatFeed.warming_status(self.live_squat.mode)
+            status = {**status, 'auto_detect': auto.status()}
         legacy = self.current_exercise_status.get('legacy_tracker') if isinstance(
             self.current_exercise_status, dict) else None
         self.current_exercise_status = {**status, 'legacy_tracker': legacy}

@@ -37,3 +37,9 @@ backend/exports/
 # Launcher state (pids, logs) from start.sh / START-LIFTGUARD.bat
 .liftguard/
 backend/data/contrib/
+
+# Exercise recognizer model: trained partly on Penn Action (research use,
+# no redistribution). Never commit it or ship it. See docs/MOVEMENT_MODES.md.
+*.joblib
+*.npz
+*.pkl
