@@ -23,9 +23,11 @@ def no_ui(monkeypatch):
 def bare_manager(users, trained=True):
     manager = um.UserManager.__new__(um.UserManager)
     manager.get_all_users = lambda: users
-    manager.matcher = SimpleNamespace(is_trained=trained)
+    manager._embeddings = {7: np.ones(128, np.float32)} if (users and trained) else {}
+    manager._embedder, manager._embedder_error = object(), None
+    manager._identifier = um.face_id.Identifier(manager._embeddings)
     manager.current_user = um.UserProfile.guest()
-    manager.CONFIRM_FRAMES = 20
+    manager.CONFIRM_FRAMES = um.face_id.CONFIRM_FRAMES
     return manager
 
 
@@ -48,7 +50,6 @@ def test_no_enrolled_users_starts_as_guest_without_input(no_ui):
 
 def test_unrecognized_face_starts_as_guest_and_never_enrolls(no_ui, monkeypatch):
     manager = bare_manager(users=[object()])
-    monkeypatch.setattr(um, "FACE_DETECTOR_OK", True)
     manager.identify_from_frame = lambda frame: (None, [], 1.0)
     manager._enroll_new_user = lambda *a, **k: pytest.fail("enrollment attempted headless")
     profile = manager.identify_from_camera(FakeCap(frames=30), timeout=5.0, interactive=False)
@@ -58,7 +59,6 @@ def test_unrecognized_face_starts_as_guest_and_never_enrolls(no_ui, monkeypatch)
 def test_enrolled_user_is_recognized_headless(no_ui, monkeypatch):
     athlete = um.UserProfile(7, "techno", "Techno")
     manager = bare_manager(users=[athlete])
-    monkeypatch.setattr(um, "FACE_DETECTOR_OK", True)
     calls = iter([None, None, athlete])
     manager.identify_from_frame = lambda frame: (next(calls), [], 0.3)
     profile = manager.identify_from_camera(FakeCap(frames=10), timeout=5.0, interactive=False)

@@ -1,38 +1,20 @@
 """
 LiftGuard AI - User Manager LITE
 ==================================
-Uses OpenCV only — NO TensorFlow, NO DeepFace, NO dlib.
-Face detection via Haar Cascade.
-Identity matching via ORB feature descriptors.
-Zero dependency conflicts.
+Users, baselines and sessions in a local SQLite file, plus on-device face ID
+(see face_id.py): one face embedding per enrolled user, computed and stored on
+this machine only. No face images or photos are stored.
 """
- 
+
 import cv2
-import numpy as np
 import sqlite3
-import pickle
 import json
 import time
 from datetime import datetime
- 
- 
-# ── OpenCV face detector (always available) ──────────────────
-# Needs opencv-contrib-python 4.8.0.74 (see requirements.txt): newer OpenCV
-# builds may not ship cv2.data or the cv2.face module this file uses.
-try:
-    _cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-    _face_cascade = cv2.CascadeClassifier(_cascade_path)
-except AttributeError:
-    _cascade_path, _face_cascade = None, None
-FACE_DETECTOR_OK = _face_cascade is not None and not _face_cascade.empty()
-if FACE_DETECTOR_OK:
-    print("   ✅ OpenCV Lite Face Manager loaded (no TensorFlow needed)")
-else:
-    print(f"   ⚠️  Haar face cascade failed to load (OpenCV {cv2.__version__}). "
-          "Face ID is off; sessions start as Guest. Install "
-          "opencv-contrib-python==4.8.0.74 to restore it.")
- 
- 
+
+from . import face_id
+
+
 DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     user_id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,104 +77,6 @@ class UserProfile:
         return cls(-1, "guest", "Guest User")
  
  
-class FaceMatcher:
-    """
-    OpenCV-based face matching using LBP histograms.
-    No deep learning — no TensorFlow conflicts.
-    """
- 
-    def __init__(self):
-        # LBP face recognizer
-        self.recognizer = cv2.face.LBPHFaceRecognizer_create(
-            radius=2, neighbors=8, grid_x=8, grid_y=8
-        )
-        self.is_trained  = False
-        self.label_map   = {}   # label_int → user_id
-        self.id_map      = {}   # user_id   → label_int
-        self.threshold   = 85.0  # Lower = stricter
- 
-    def detect_faces(self, frame_gray):
-        """Returns list of (x,y,w,h) face rectangles."""
-        if not FACE_DETECTOR_OK:
-            return []
-        faces = _face_cascade.detectMultiScale(
-            frame_gray,
-            scaleFactor  = 1.1,
-            minNeighbors = 6,
-            minSize      = (80, 80),
-            flags        = cv2.CASCADE_SCALE_IMAGE
-        )
-        return faces if len(faces) > 0 else []
- 
-    def extract_face_region(self, frame_gray, rect, size=(100, 100)):
-        """Extract and normalize a face region."""
-        x, y, w, h = rect
-        # Add margin
-        margin = int(min(w, h) * 0.1)
-        x1 = max(0, x - margin)
-        y1 = max(0, y - margin)
-        x2 = min(frame_gray.shape[1], x + w + margin)
-        y2 = min(frame_gray.shape[0], y + h + margin)
- 
-        face_roi = frame_gray[y1:y2, x1:x2]
-        if face_roi.size == 0:
-            return None
- 
-        # Resize to standard size
-        face_roi = cv2.resize(face_roi, size)
- 
-        # Equalize histogram for lighting robustness
-        face_roi = cv2.equalizeHist(face_roi)
- 
-        return face_roi
- 
-    def train(self, faces_by_user: dict):
-        """
-        Train recognizer.
-        faces_by_user: {user_id: [face_img1, face_img2, ...]}
-        """
-        if not faces_by_user:
-            self.is_trained = False
-            return
- 
-        all_faces  = []
-        all_labels = []
-        self.label_map = {}
-        self.id_map    = {}
- 
-        for label_int, (user_id, face_list) in enumerate(
-            faces_by_user.items()
-        ):
-            self.label_map[label_int] = user_id
-            self.id_map[user_id]      = label_int
-            for face in face_list:
-                all_faces.append(face)
-                all_labels.append(label_int)
- 
-        if all_faces:
-            self.recognizer.train(all_faces, np.array(all_labels))
-            self.is_trained = True
-            print(f"   🧠 LBPH trained on {len(faces_by_user)} users")
- 
-    def predict(self, face_img):
-        """
-        Returns (user_id, confidence) or (None, 999).
-        Lower confidence = better match.
-        """
-        if not self.is_trained:
-            return None, 999.0
- 
-        try:
-            label, confidence = self.recognizer.predict(face_img)
-            if confidence <= self.threshold:
-                user_id = self.label_map.get(label)
-                return user_id, confidence
-        except Exception:
-            pass
- 
-        return None, 999.0
- 
- 
 class UserManager:
     """
     OpenCV-only user manager.
@@ -201,129 +85,133 @@ class UserManager:
  
     def __init__(self, db_path="liftguard_users.db"):
         self.db_path  = db_path
-        self.matcher  = FaceMatcher()
- 
+
         self._current_session_id = -1
         self.current_user        = UserProfile.guest()
- 
-        # ID state machine
+
+        # ID state machine (identify_from_frame)
+        self.CONFIRM_FRAMES = face_id.CONFIRM_FRAMES
         self.id_candidate   = None
         self.id_frame_count = 0
-        self.CONFIRM_FRAMES = 20
- 
+
         self._init_db()
+        # Older versions stored face images (LBPH samples) and a profile JPEG
+        # per user. Delete them: only embeddings are kept now.
+        purged = face_id.purge_stored_face_images(db_path)
+        if purged:
+            print(f"   🧹 Deleted stored face images for {purged} user(s); they re-enroll for face ID")
+        self.gallery   = face_id.FaceGallery(db_path)
+        self._embedder = None
+        self._embedder_error = None
         self._load_and_train()
- 
+        self._identifier = face_id.Identifier(self._embeddings)
+
         n = len(self._get_user_count())
         print(f"   📁 DB: {db_path} ({n} users)")
- 
+
     @property
     def current_session_id(self):
         return self._current_session_id
- 
+
+    # ── face ID ───────────────────────────────────────────────
+    @property
+    def embedder(self):
+        """The YuNet+SFace embedder, or None when the model files are missing."""
+        if self._embedder is None and self._embedder_error is None:
+            if not face_id.models_present():
+                self._embedder_error = "models_missing"
+            else:
+                try:
+                    self._embedder = face_id.SFaceEmbedder()
+                except Exception as exc:  # corrupt file, OpenCV without FaceRecognizerSF
+                    self._embedder_error = f"{type(exc).__name__}"
+        return self._embedder
+
+    def face_id_status(self):
+        available = self.embedder is not None
+        return {
+            "available": available,
+            "reason": None if available else self._embedder_error,
+            "model": face_id.MODEL_NAME if available else None,
+            "enrolled_user_ids": sorted(self._embeddings),
+        }
+
+    def embed_bgr(self, frame_bgr):
+        emb = self.embedder
+        if emb is None:
+            return face_id.EmbedResult(None, "unavailable")
+        return emb.embed(frame_bgr)
+
+    def enroll_face(self, user_id, embeddings):
+        """Save the average embedding for user_id. Returns (ok, message)."""
+        mean, err = face_id.enrollment_embedding(embeddings)
+        if mean is None:
+            return False, err
+        self.gallery.save(user_id, mean, samples=sum(e is not None for e in embeddings))
+        self._load_and_train()
+        return True, None
+
+    def forget_face(self, user_id):
+        removed = self.gallery.forget(user_id)
+        self._load_and_train()
+        return removed
+
+    def is_enrolled(self, user_id):
+        return user_id in self._embeddings
+
+    def match_embedding(self, embedding):
+        return face_id.best_match(embedding, self._embeddings)
+
     def _init_db(self):
         with self._connect() as conn:
             conn.executescript(DB_SCHEMA)
             conn.commit()
- 
+
     def _connect(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
- 
+
     def _get_user_count(self):
         with self._connect() as conn:
             rows = conn.execute("SELECT user_id FROM users").fetchall()
         return rows
- 
+
     def _load_and_train(self):
-        """Load face data from DB and train LBPH recognizer."""
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT user_id, face_features FROM users "
-                "WHERE face_features IS NOT NULL"
-            ).fetchall()
- 
-        faces_by_user = {}
-        for row in rows:
-            try:
-                face_list = pickle.loads(row["face_features"])
-                faces_by_user[row["user_id"]] = face_list
-            except Exception:
-                pass
- 
-        if not faces_by_user:
-            print("   ℹ️  No face data in DB yet")
-            return
- 
-        # Train LBPH
-        all_faces  = []
-        all_labels = []
-        self.matcher.label_map = {}
-        self.matcher.id_map    = {}
- 
-        for label_int, (user_id, face_list) in enumerate(
-            faces_by_user.items()
-        ):
-            self.matcher.label_map[label_int] = user_id
-            self.matcher.id_map[user_id]      = label_int
-            for face in face_list:
-                all_faces.append(face)
-                all_labels.append(label_int)
- 
-        if all_faces:
-            self.matcher.recognizer.train(
-                all_faces, np.array(all_labels)
-            )
-            self.matcher.is_trained = True
-            print(f"   🧠 LBPH trained: {len(faces_by_user)} users, "
-                  f"{len(all_faces)} face samples")
- 
-    def register_user(self, username, display_name,
-                     face_images=None, profile_photo=None):
-        """Register user with list of face images (numpy arrays)."""
-        features_blob = None
-        if face_images:
-            features_blob = pickle.dumps(face_images)
- 
-        photo_blob = None
-        if profile_photo is not None:
-            _, buf = cv2.imencode(
-                '.jpg', profile_photo,
-                [cv2.IMWRITE_JPEG_QUALITY, 85]
-            )
-            photo_blob = buf.tobytes()
- 
+        """Load enrolled face embeddings from the local database."""
+        self._embeddings = self.gallery.load()
+        if getattr(self, "_identifier", None) is not None:
+            self._identifier.gallery = self._embeddings
+
+    def register_user(self, username, display_name, embeddings=None):
+        """Create a user; with ``embeddings`` (from embed_bgr) also enroll their face.
+
+        No images are stored. Returns the profile, or None if the face
+        samples were rejected (then no user is created).
+        """
+        if embeddings is not None:
+            mean, err = face_id.enrollment_embedding(embeddings)
+            if mean is None:
+                raise ValueError(err)
         now = datetime.now().isoformat()
- 
         try:
             with self._connect() as conn:
                 cur = conn.execute(
-                    """INSERT INTO users
-                       (username, display_name, created_at,
-                        last_seen, face_features, profile_photo)
-                       VALUES (?,?,?,?,?,?)""",
-                    (username, display_name, now, now,
-                     features_blob, photo_blob)
+                    """INSERT INTO users (username, display_name, created_at, last_seen)
+                       VALUES (?,?,?,?)""",
+                    (username, display_name, now, now),
                 )
                 user_id = cur.lastrowid
                 conn.commit()
- 
-            print(f"   ✅ Registered: {display_name} (ID={user_id})")
- 
-            # Retrain recognizer with new user
-            self._load_and_train()
- 
-            return UserProfile(
-                user_id=user_id,
-                username=username,
-                display_name=display_name
-            )
- 
         except sqlite3.IntegrityError:
             print("   ⚠️  Username exists")
             return self.get_user_by_username(username)
- 
+        if embeddings is not None:
+            self.gallery.save(user_id, mean, samples=sum(e is not None for e in embeddings))
+            self._load_and_train()
+        print(f"   ✅ Registered user ID={user_id}")
+        return UserProfile(user_id=user_id, username=username, display_name=display_name)
+
     def get_user_by_id(self, user_id):
         with self._connect() as conn:
             row = conn.execute(
@@ -453,55 +341,32 @@ class UserManager:
         pass  # Simplified for lite version
  
     def identify_from_frame(self, frame_rgb):
-        """Single-frame identification."""
-        frame_gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
-        faces = self.matcher.detect_faces(frame_gray)
- 
-        if len(faces) == 0:
-            self.id_frame_count = 0
-            self.id_candidate   = None
+        """One frame of streaming identification.
+
+        Returns (profile or None, face locations as (top, right, bottom, left),
+        distance 0..2 where lower is closer). A profile is returned only after
+        the same enrolled user matched on CONFIRM_FRAMES good frames in a row.
+        """
+        if self.embedder is None or not self._embeddings:
+            self.id_candidate, self.id_frame_count = None, 0
             return None, [], 1.0
- 
-        # Use largest face
-        largest = max(faces, key=lambda f: f[2] * f[3])
-        x, y, w, h = largest
- 
-        # Convert to (top, right, bottom, left) for UI
-        locations = [(y, x+w, y+h, x)]
- 
-        if not self.matcher.is_trained:
-            return None, locations, 1.0
- 
-        face_img = self.matcher.extract_face_region(frame_gray, largest)
-        if face_img is None:
-            return None, locations, 1.0
- 
-        user_id, confidence = self.matcher.predict(face_img)
- 
-        if user_id is None:
-            self.id_frame_count = 0
-            self.id_candidate   = None
-            return None, locations, 1.0
- 
-        # Normalize confidence to 0-1 distance
-        distance = confidence / 100.0
- 
-        # State machine
-        if self.id_candidate and self.id_candidate[0] == user_id:
-            self.id_frame_count += 1
-        else:
-            self.id_candidate   = (user_id, confidence)
-            self.id_frame_count = 1
- 
-        if self.id_frame_count >= self.CONFIRM_FRAMES:
-            profile = self.get_user_by_id(user_id)
-            if profile:
-                self.id_frame_count = 0
-                self.id_candidate   = None
-                return profile, locations, distance
- 
+        result = self.embed_bgr(cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR))
+        locations = []
+        if result.box is not None:
+            x, y, w, h = result.box
+            locations = [(y, x + w, y + h, x)]
+        uid = self._identifier.observe(result.embedding)
+        cand = self._identifier.candidate
+        self.id_candidate   = (cand, self._identifier.last_score) if cand is not None else None
+        self.id_frame_count = self._identifier.count
+        distance = 1.0 - self._identifier.last_score
+        if uid is not None:
+            profile = self.get_user_by_id(uid)
+            self._identifier.candidate, self._identifier.count = None, 0
+            self.id_candidate, self.id_frame_count = None, 0
+            return profile, locations, distance
         return None, locations, distance
- 
+
     def identify_from_camera(self, cap, timeout=20.0,
                             allow_new_user=True, allow_guest=True,
                             interactive=True):
@@ -528,7 +393,7 @@ class UserManager:
         start_time   = time.time()
         id_candidate = None
         id_count     = 0
-        CONFIRM      = 20
+        CONFIRM      = 5   # interactive: 5 good frames in a row
  
         while True:
             ret, frame = cap.read()
@@ -536,37 +401,28 @@ class UserManager:
                 continue
  
             elapsed    = time.time() - start_time
-            frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             display    = frame.copy()
             h, w       = display.shape[:2]
- 
-            faces = self.matcher.detect_faces(frame_gray)
+
+            res = self.embed_bgr(frame)
+            faces = [res.box] if res.box is not None else []
             matched_uid  = None
-            confidence_v = 999.0
- 
-            if len(faces) > 0:
-                largest = max(faces, key=lambda f: f[2]*f[3])
-                x, y, fw, fh = largest
- 
-                if self.matcher.is_trained:
-                    face_img = self.matcher.extract_face_region(
-                        frame_gray, largest
-                    )
-                    if face_img is not None:
-                        matched_uid, confidence_v = self.matcher.predict(
-                            face_img
-                        )
- 
-                        if matched_uid:
-                            if id_candidate == matched_uid:
-                                id_count += 1
-                            else:
-                                id_candidate = matched_uid
-                                id_count     = 1
+            confidence_v = 0.0
+
+            if faces:
+                x, y, fw, fh = res.box
+                if res.embedding is not None:
+                    matched_uid, confidence_v = self.match_embedding(res.embedding)
+                    if matched_uid:
+                        if id_candidate == matched_uid:
+                            id_count += 1
                         else:
-                            id_candidate = None
-                            id_count     = 0
- 
+                            id_candidate = matched_uid
+                            id_count     = 1
+                    else:
+                        id_candidate = None
+                        id_count     = 0
+
                 # Draw face box
                 box_col = (
                     (0, 255,   0) if matched_uid else
@@ -587,7 +443,7 @@ class UserManager:
                 if matched_uid:
                     p = self.get_user_by_id(matched_uid)
                     nm = p.display_name if p else "?"
-                    label = f"Match: {nm} ({confidence_v:.0f})"
+                    label = f"Match: {nm} ({confidence_v:.2f})"
                     cv2.putText(display, label,
                                (x, y-12),
                                cv2.FONT_HERSHEY_SIMPLEX,
@@ -678,10 +534,11 @@ class UserManager:
  
     def _identify_headless(self, cap, timeout):
         """Recognize an enrolled user without any UI; Guest on no match."""
-        if not self.get_all_users() or not self.matcher.is_trained or not FACE_DETECTOR_OK:
+        if not self._embeddings or self.embedder is None:
             print("  👤 Guest (no enrolled users or face ID unavailable)")
             return UserProfile.guest()
         self.id_candidate, self.id_frame_count = None, 0
+        self._identifier.candidate, self._identifier.count = None, 0
         deadline = time.time() + timeout
         while time.time() < deadline:
             ret, frame = cap.read()
@@ -698,7 +555,7 @@ class UserManager:
         return UserProfile.guest()
 
     def _enroll_new_user(self, cap, existing_frames=None):
-        """Enroll new user with LBPH face recognition."""
+        """Desktop enrollment: a few seconds of frames -> one averaged face embedding."""
         print("\n" + "=" * 55)
         print("  🆕 NEW USER ENROLLMENT")
         print("=" * 55)
@@ -716,14 +573,13 @@ class UserManager:
         print("  📷 Capturing face (6 seconds)...")
         print("  Look at camera, slowly move head left & right\n")
  
-        face_images   = []
-        profile_photo = None
+        embeddings    = []
         start_time    = time.time()
         DURATION      = 6.0
-        MIN_FACES     = 30   # minimum samples needed
+        MIN_FACES     = 15   # good frames wanted
  
         while time.time() - start_time < DURATION or \
-              len(face_images) < MIN_FACES:
+              len(embeddings) < MIN_FACES:
  
             # Hard timeout
             if time.time() - start_time > DURATION + 3:
@@ -733,28 +589,21 @@ class UserManager:
             if not ret:
                 continue
  
-            frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             display    = frame.copy()
             h, w       = display.shape[:2]
             elapsed    = time.time() - start_time
- 
-            faces = self.matcher.detect_faces(frame_gray)
- 
-            if len(faces) > 0:
-                largest = max(faces, key=lambda f: f[2]*f[3])
-                x, y, fw, fh = largest
- 
-                face_img = self.matcher.extract_face_region(
-                    frame_gray, largest
-                )
-                if face_img is not None:
-                    face_images.append(face_img)
-                    if profile_photo is None:
-                        profile_photo = frame.copy()
- 
+
+            res = self.embed_bgr(frame)
+            faces = [res.box] if res.box is not None else []
+
+            if faces:
+                x, y, fw, fh = res.box
+                if res.embedding is not None:
+                    embeddings.append(res.embedding)
+
                 cv2.rectangle(display,(x,y),(x+fw,y+fh),(0,255,0),3)
                 cv2.putText(display,
-                           f"CAPTURED #{len(face_images)}",
+                           f"CAPTURED #{len(embeddings)}",
                            (x, y-12),
                            cv2.FONT_HERSHEY_SIMPLEX,
                            0.7, (0,255,0), 2)
@@ -769,7 +618,7 @@ class UserManager:
                          (0,255,0) if len(faces)>0 else (80,80,80),-1)
             cv2.putText(display,
                        f"Enrolling {display_name} — "
-                       f"{len(face_images)} samples — "
+                       f"{len(embeddings)} samples — "
                        f"{max(0,DURATION-elapsed):.1f}s",
                        (bar_x, bar_y-10),
                        cv2.FONT_HERSHEY_SIMPLEX,0.5,(200,200,200),1)
@@ -783,22 +632,17 @@ class UserManager:
  
         cv2.destroyWindow("LiftGuard AI — Enrollment")
  
-        print(f"\n  📊 Captured {len(face_images)} face samples")
+        print(f"\n  📊 Captured {len(embeddings)} face samples")
  
-        if len(face_images) < 10:
-            print("  ❌ Not enough samples — try better lighting")
+        try:
+            profile = self.register_user(username=username, display_name=display_name,
+                                         embeddings=embeddings)
+        except ValueError as exc:
+            print(f"  ❌ {exc}")
             return UserProfile.guest()
- 
-        # Save and train
-        profile = self.register_user(
-            username      = username,
-            display_name  = display_name,
-            face_images   = face_images,
-            profile_photo = profile_photo
-        )
- 
+
         print(f"\n  ✅ REGISTERED: {display_name} (ID #{profile.user_id})")
-        print(f"  Samples: {len(face_images)}")
+        print(f"  Samples: {len(embeddings)}")
         self.current_user = profile
         return profile
  
