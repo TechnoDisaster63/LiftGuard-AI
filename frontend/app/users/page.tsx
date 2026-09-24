@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, UserOut } from "@/lib/api";
+import { api, FaceStatus, UserOut } from "@/lib/api";
+import IdentifyPanel from "@/components/lg/IdentifyPanel";
 import { useSessionRows } from "@/lib/history";
 import { Alert, Split, fmtDate, initialsOf } from "@/components/lg/ui";
 
@@ -32,8 +33,9 @@ function RecentStrip({ user }: { user: UserOut }) {
 export default function UsersPage() {
   const [users, setUsers] = useState<UserOut[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [face, setFace] = useState<FaceStatus | null>(null);
 
-  useEffect(() => {
+  const load = () =>
     api.users
       .list()
       .then((u) => setUsers(u.filter((x) => !x.is_guest)))
@@ -41,7 +43,22 @@ export default function UsersPage() {
         setUsers([]);
         setError(e instanceof Error ? e.message : "Couldn't load users");
       });
+
+  useEffect(() => {
+    load();
+    api.users.faceStatus().then(setFace).catch(() => setFace(null));
   }, []);
+
+  const forget = async (u: UserOut) => {
+    if (!window.confirm(`Delete ${u.display_name}'s face signature? Their account and history stay.`)) return;
+    try {
+      await api.users.forgetFace(u.user_id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't delete the face signature");
+    }
+  };
+  const faceLocal = !!face && face.local && face.available;
 
   return (
     <div className="lg-fade">
@@ -49,6 +66,22 @@ export default function UsersPage() {
       <div className="lg-d mt-1.5" style={{ fontSize: 92 }}>
         {users === null ? "…" : `${users.length} enrolled`}
       </div>
+      <div className="mt-3" style={{ fontSize: 15 }}>
+        {face === null ? null : faceLocal ? (
+          <span className="lg-m" style={{ color: "var(--lg-mint)" }}>
+            Face ID runs on this computer. Your face never leaves this device: only a face signature (128 numbers, not a photo) is stored here.
+          </span>
+        ) : !face.local ? (
+          <span className="lg-m lg-dim">Face ID is not available from this device. It only works in a browser on the computer running LiftGuard.</span>
+        ) : (
+          <span className="lg-m lg-dim">Face ID is not available on this machine (face model files missing: run python fetch_face_models.py in backend/).</span>
+        )}
+      </div>
+      {faceLocal && (face?.enrolled_count ?? 0) > 0 && (
+        <div className="mt-4" style={{ maxWidth: 560 }}>
+          <IdentifyPanel />
+        </div>
+      )}
       {error && (
         <div className="mt-4">
           <Alert>{error}</Alert>
@@ -66,6 +99,21 @@ export default function UsersPage() {
               {u.display_name}
             </div>
             <div className="lg-m lg-faint mt-1">@{u.username}</div>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="lg-chip lg-m" data-testid="face-chip" style={u.face_enrolled ? { color: "var(--lg-mint)", borderColor: "var(--lg-mint)" } : undefined}>
+                {u.face_enrolled ? "Face ID on" : "No face ID"}
+              </span>
+              {faceLocal && !u.face_enrolled && (
+                <Link href={`/register?user=${u.user_id}`} className="lg-m" style={{ fontSize: 12, textDecoration: "underline" }}>
+                  Set up
+                </Link>
+              )}
+              {u.face_enrolled && (
+                <button className="lg-m lg-faint" style={{ fontSize: 12, textDecoration: "underline" }} onClick={() => forget(u)}>
+                  Delete face
+                </button>
+              )}
+            </div>
             <div className="flex gap-7 mt-4">
               <div>
                 <div className="lg-d" style={{ fontSize: 36 }}>
@@ -94,7 +142,7 @@ export default function UsersPage() {
             Register someone
           </div>
           <div className="lg-dim mt-1.5" style={{ fontSize: 14 }}>
-            About 6 seconds in front of the webcam. Stored on this machine.
+            About 6 seconds in front of this computer&apos;s webcam. Only a face signature is kept, on this machine.
           </div>
           <Link href="/register" className="lg-btn mt-4 self-start">
             Start face capture

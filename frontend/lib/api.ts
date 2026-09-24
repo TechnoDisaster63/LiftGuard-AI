@@ -68,6 +68,23 @@ export interface UserOut {
   total_sessions: number;
   last_seen: string | null;
   is_guest: boolean;
+  // True when this user has a face signature stored on the LiftGuard computer.
+  face_enrolled?: boolean;
+}
+
+export interface FaceStatus {
+  available: boolean;
+  reason: string | null;
+  // True when this browser runs on the same computer as the backend.
+  local: boolean;
+  enrolled_count: number;
+}
+
+export interface FaceIdentifyResponse {
+  matched: boolean;
+  user: UserOut | null;
+  reason: "no_face" | "no_match" | "ambiguous" | null;
+  frames_with_face: number;
 }
 
 export interface ArduinoStatus {
@@ -160,6 +177,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function sendJson<T>(method: string, path: string, payload?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: jsonHeaders(),
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.detail ?? `${res.status} ${res.statusText}`);
+  }
+  return body as T;
+}
+
 export const api = {
   health: () => request<{ status: string; app: string }>("/api/health"),
 
@@ -200,6 +230,11 @@ export const api = {
       }
       return body as UserRegisterResponse;
     },
+    faceStatus: () => request<FaceStatus>("/api/users/face-id/status"),
+    enrollFace: (userId: number, images: string[]) =>
+      sendJson<UserOut>("POST", `/api/users/${userId}/face`, { images }),
+    forgetFace: (userId: number) => sendJson<UserOut>("DELETE", `/api/users/${userId}/face`),
+    identify: (images: string[]) => sendJson<FaceIdentifyResponse>("POST", "/api/users/identify", { images }),
   },
 
   hardware: {
