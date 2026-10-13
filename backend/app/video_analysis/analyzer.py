@@ -258,6 +258,9 @@ def _coaching_flags(since_standing: Sequence[dict], current: Sequence[dict], min
     return flags, evidence
 
 
+FRONT_VIEW_UNRELIABLE_FLAGS = ("LIMITED_DEPTH", "EXCESSIVE_TRUNK_LEAN")
+
+
 def _form_flags(min_knee: float, max_trunk: float, rom: float) -> list[str]:
     flags: list[str] = []
     if min_knee > 110:
@@ -482,6 +485,11 @@ class RepStateMachine:
                 extra, coaching = _coaching_flags(self.since_standing, current, min_knee, self.reps,
                                                   self.descent_seconds, leg_ref, self.aspect, config, core,
                                                   thresholds["standing_knee_deg"], self.reference_frames)
+            if coaching.get("view") == "front":
+                # Knee and trunk angles are foreshortened in a front view, so
+                # depth and lean cannot be judged from it. Dropping them avoids
+                # false LIMITED_DEPTH / EXCESSIVE_TRUNK_LEAN flags on normal reps.
+                core = [f for f in core if f not in FRONT_VIEW_UNRELIABLE_FLAGS]
             rep = {
                 "rep": len(self.reps) + 1,
                 "start_seconds": round(self.start_frame / fps, 3),

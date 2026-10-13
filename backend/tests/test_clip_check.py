@@ -39,17 +39,15 @@ def test_committed_clip_fixture_passes(path):
 
 def test_real_front_view_squat_clip_through_the_pipeline():
     """The one real clip we have. Squat mode is built for a side view; from the front the knee
-    angle is foreshortened, so LIMITED_DEPTH fires on most of these normal reps. The pipeline
-    must report that as a failure, while the count and the four coaching flags stay right."""
+    angle is foreshortened. Depth and trunk lean cannot be judged from there, so those two flags
+    are suppressed and normal reps are not falsely flagged. Count and coaching flags stay right."""
     fixture = load_fixture(FIXTURES / "front_view_squats.json.gz")
     result = run_clip("squat", fixture)
     assert result["rep_count"] == 15 and result["pose_coverage"] > 0.9
     coaching = {"KNEES_CAVING", "HEELS_LIFTING", "DEPTH_INCONSISTENT", "FAST_DESCENT"}
     assert not any(coaching & set(r["form_flags"]) for r in result["reps"])
-    verdict = check_clip(result, 15)
-    limited = [r["rep"] for r in result["reps"] if "LIMITED_DEPTH" in r["form_flags"]]
-    assert limited and not verdict["passed"]
-    assert verdict["problems"] == [f"rep {n}: flags not expected ['LIMITED_DEPTH']" for n in limited]
+    assert not any({"LIMITED_DEPTH", "EXCESSIVE_TRUNK_LEAN"} & set(r["form_flags"]) for r in result["reps"])
+    assert check_clip(result, 15)["passed"]
 
 
 # --- New modes, synthetic stand-ins until the real clips arrive -------------------

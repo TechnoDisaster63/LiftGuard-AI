@@ -78,3 +78,19 @@ class TestRequireApiKey:
         client = self._app()
         resp = client.get("/protected", headers={"Authorization": "Bearer test-key"})
         assert resp.status_code == 200
+
+
+def test_websocket_laser_control_validates_host(monkeypatch):
+    """The WebSocket control path must apply the same host rules as the REST route."""
+    from types import SimpleNamespace
+
+    from app.core.session_manager import SessionManager
+
+    monkeypatch.setattr(settings, "ESP32_ALLOWED_HOSTS", [])
+    called = []
+    fake = SimpleNamespace(engine=SimpleNamespace(connect_wifi_laser=lambda h: called.append(h) or True))
+    with pytest.raises(ValueError):
+        SessionManager.handle_control(fake, "connect_wifi_laser:evil.example.com")
+    assert called == []
+    SessionManager.handle_control(fake, "connect_wifi_laser:192.168.1.42")
+    assert called == ["192.168.1.42"]
