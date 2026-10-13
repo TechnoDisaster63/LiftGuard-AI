@@ -132,7 +132,7 @@ def identify(req: FaceIdentifyRequest):
             votes[uid] = votes.get(uid, 0) + 1
     if len(votes) == 1:
         uid, n = next(iter(votes.items()))
-        if n >= min(3, faces):
+        if n >= 3:
             user = manager.get_user_by_id(uid)
             return FaceIdentifyResponse(matched=True, user=_to_out(user, manager), frames_with_face=faces)
     reason = "no_face" if faces == 0 else ("ambiguous" if len(votes) > 1 else "no_match")

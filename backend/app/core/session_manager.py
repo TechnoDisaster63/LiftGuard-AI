@@ -493,7 +493,8 @@ class SessionManager:
                 raise ValueError("Camera id must be a number") from exc
             return self._switch_camera(cam_id)
         elif action.startswith("connect_wifi_laser:"):
-            host = action.split(":", 1)[1]
+            from .security import validate_esp32_host
+            host = validate_esp32_host(action.split(":", 1)[1])
             ok = e.connect_wifi_laser(host)
             return f"WiFi laser {'connected at ' + host if ok else 'connection failed'}"
         elif action == "connect_usb_laser":

@@ -79,8 +79,8 @@ The live counter and the offline analyzer share one engine (`backend/app/video_a
 
 ## Limits, stated plainly
 
-- **Squat only.** Other movements aren't recognised yet. The screen says "Detecting squat..." until the first real rep.
-- **2D angles.** Joint angles are measured in the image plane, not in 3D. A side view works best. Keep the whole body in frame, in one continuous shot: a camera cut or zoom can fake or hide a rep.
+- **One validated movement: squat.** Push-up, lunge and jumping jacks are built but locked until each passes a recorded-clip check. Other movements aren't recognised yet. The screen says "Detecting squat..." until the first real rep.
+- **2D angles.** Joint angles are measured in the image plane, not in 3D. A side view works best. From a front view, depth and trunk lean can't be judged, so those two flags are skipped (knee-caving is still checked). Keep the whole body in frame, in one continuous shot: a camera cut or zoom can fake or hide a rep.
 - **Not validated as a medical or biomechanical tool.** The thresholds were checked on development clips and synthetic tests, not in a clinical study. The four coaching flags were checked on one real front-view clip (no false flags on 15 normal squats) and on synthetic faults; there is no real clip yet of caving knees or lifting heels.
 - **No back-rounding check.** The pose model has no points along the spine, so LiftGuard measures overall trunk lean ("Chest up") but cannot tell a rounded back from a straight one.
 - **Experimental, off by default:** the pan-tilt laser (Arduino / ESP32) and the older TCN risk model. No trained weights ship for the model, so the dashboard shows none of its output.
@@ -105,7 +105,7 @@ cd backend && pip install -r requirements-dev.txt && pytest -q && ruff check app
 cd frontend && npm ci && npx tsc --noEmit && npm run build
 ```
 
-The backend suite has 152 tests (plus one that re-checks each recorded clip fixture once they are added). They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), each coaching flag firing on its fault and staying quiet on normal reps, report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
+The backend suite has 200+ tests (plus one that re-checks each recorded clip fixture once they are added). They cover angle maths, deterministic rep analysis on recorded landmark fixtures (15 squats counted, 0 on jumps and holds), each coaching flag firing on its fault and staying quiet on normal reps, report output, low-visibility failure, headless session start, camera errors and session lifecycle edge cases. CI runs the tests plus both builds on every pull request.
 
 Manual start, if you'd rather not use the launcher:
 
@@ -136,7 +136,7 @@ start.sh · START-LIFTGUARD.bat · stop.sh · STOP-LIFTGUARD.bat
 
 ## Security
 
-The backend can enroll faces, read session data and drive hardware, so it listens on `127.0.0.1` by default and has an opt-in API key. If you set `LIFTGUARD_API_KEY`, set the same value as `NEXT_PUBLIC_LIFTGUARD_API_KEY` for the dashboard. Only run the dashboard as a trusted operator UI, because `NEXT_PUBLIC_*` values end up in browser code. ESP32 connections only go to private-network hosts or an explicit allowlist. See [SECURITY.md](SECURITY.md).
+The backend can enroll faces, read session data and drive hardware, so it listens on `127.0.0.1` by default and has an opt-in API key. If you set `LIFTGUARD_API_KEY`, set the same value as `NEXT_PUBLIC_LIFTGUARD_API_KEY` for the dashboard. Only run the dashboard as a trusted operator UI, because `NEXT_PUBLIC_*` values end up in browser code. ESP32 connections (REST and WebSocket) only go to private-network hosts or an explicit allowlist. Face-ID "identify me" needs the same person on at least 3 frames. See [SECURITY.md](SECURITY.md).
 
 ## License
 

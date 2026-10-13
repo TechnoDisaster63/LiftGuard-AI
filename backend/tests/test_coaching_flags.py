@@ -185,3 +185,9 @@ def test_coaching_flags_can_be_turned_off():
     reps = count(side_frames(heel_rise=0.05, down_frames=4, up_frames=20), coaching_flags=False)
     assert len(reps) == 4
     assert not any(NEW_FLAGS & set(r["form_flags"]) for r in reps)
+
+
+def test_front_view_does_not_flag_depth_or_lean():
+    """Knee and trunk angles are foreshortened from the front, so normal reps must not get these flags."""
+    reps, _ = count_fixture("front_view_squats.json.gz")
+    assert not any({"LIMITED_DEPTH", "EXCESSIVE_TRUNK_LEAN"} & set(r["form_flags"]) for r in reps)
